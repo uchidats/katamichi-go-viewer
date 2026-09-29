@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1763c6">
+  <meta name="description" content="片道GO!の掲載情報を地域・曜日・車種から探す非公式ビューア。">
+  <title>片道GO! ビューア</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./script.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container brand"><span class="brand-icon" aria-hidden="true">↗</span><span>片道GO! <span class="brand-sub">ビューア</span></span><span class="demo-badge">非公式</span></div>
+  </header>
+  <main class="container">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">ONE WAY, YOUR WAY</p>
+      <h1 id="page-title">次の片道を、<br class="mobile-break">見つけよう。</h1>
+      <p>地域や曜日で絞り込んで、あなたに合う一台を。</p>
+      <p class="demo-note">片道GO!の掲載情報を表示する非公式ビューアです。最新の空き状況や詳しい利用条件は元サイトでご確認ください。</p>
+    </section>
+
+    <section class="filter-panel" aria-labelledby="filter-title">
+      <div class="panel-heading"><h2 id="filter-title">条件から探す</h2><button type="button" id="reset-filters" class="text-button">条件をリセット</button></div>
+      <form id="filter-form">
+        <div class="quick-options">
+          <label class="availability-option"><input type="checkbox" name="availableOnly"> 利用可能のみ</label>
+          <button type="button" id="recommended" class="primary-button">おすすめ条件を適用 <span aria-hidden="true">↗</span></button>
+        </div>
+        <div class="recommendation-options">
+          <label><input type="checkbox" name="relatedRegions"> 関東・東北関連</label>
+          <label><input type="checkbox" name="includesDayOff"> 土日祝を含む</label>
+          <p>「関東・東北関連」は出発または到着が対象地域。「土日祝を含む」は利用期間内に対象日がある車両です。</p>
+        </div>
+        <div class="filter-grid">
+          <fieldset><legend>出発地域</legend><div id="departure-options" class="choices"></div></fieldset>
+          <fieldset><legend>到着地域</legend><div id="arrival-options" class="choices"></div></fieldset>
+          <fieldset><legend>貸出曜日 <span>利用開始日</span></legend><div id="rental-day-options" class="choices"></div></fieldset>
+          <fieldset><legend>返却曜日 <span>利用終了日</span></legend><div id="return-day-options" class="choices"></div></fieldset>
+          <fieldset class="full-width"><legend>除外車種 <span>選択した車種を表示しません</span></legend><div id="excluded-model-options" class="choices"></div></fieldset>
+        </div>
+        <p class="filter-hint">未選択の項目はすべて表示。同じ項目内は「いずれか」、異なる項目間は「すべて一致」で絞り込みます。</p>
+        <p id="holiday-note" class="results-note">貸出日・返却日それぞれの祝日情報はAPIにないため、「祝」は選択できません。期間内の祝日は「土日祝を含む」で絞り込めます。</p>
+      </form>
+    </section>
+
+    <section class="results" aria-labelledby="results-title">
+      <div class="results-heading"><h2 id="results-title">見つかった車両</h2><p id="result-count" role="status" aria-live="polite" aria-atomic="true"></p></div>
+      <p id="updated-at" class="results-note"></p>
+      <p id="loading-state" class="loading-state" role="status">データを読み込んでいます…</p>
+      <div id="error-state" class="error-state" hidden><p id="error-message" role="alert"></p><button type="button" id="retry-load" class="secondary-button">再読み込み</button></div>
+      <div id="vehicle-list" class="vehicle-grid"></div>
+      <div id="empty-state" class="empty-state" hidden><span aria-hidden="true">⌕</span><h3>条件に合う車両がありません</h3><p>地域や曜日の選択を減らして、もう一度探してみてください。</p><button type="button" id="empty-reset" class="secondary-button">すべての条件をリセット</button></div>
+    </section>
+    <noscript><p class="demo-note">フィルターと車両情報を表示するには、JavaScriptを有効にしてください。</p></noscript>
+  </main>
+  <footer class="container">片道GO! ビューア · 非公式<br>トヨタレンタカーとは関係のない個人制作のビューアです。</footer>
+</body>
+</html>
