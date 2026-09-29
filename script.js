@@ -9,6 +9,55 @@ const regions = ["北海道", "東北", "関東", "中部", "近畿", "中国・
 const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 const excludedModels = ["アルファード", "ハイエース", "ヴォクシー"];
 const form = document.querySelector("#filter-form");
+const FILTER_STORAGE_KEY = "katamichi-go-viewer.filters.v1";
+const booleanFilters = ["availableOnly", "relatedRegions", "includesDayOff"];
+const listFilters = ["departure", "arrival", "rentalDay", "returnDay", "excludedModel"];
+let savedFilters = loadFilterSettings();
+
+function loadFilterSettings() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY));
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+    const settings = {};
+    for (const name of booleanFilters) settings[name] = stored[name] === true;
+    for (const name of listFilters) {
+      settings[name] = Array.isArray(stored[name]) ? stored[name].filter(value => typeof value === "string") : [];
+    }
+    return settings;
+  } catch {
+    // 保存データの破損やストレージの利用制限があっても通常表示を続けます。
+    return {};
+  }
+}
+
+function readFilters() {
+  const data = new FormData(form);
+  const filters = {};
+  for (const name of booleanFilters) filters[name] = data.has(name);
+  for (const name of listFilters) filters[name] = data.getAll(name);
+  return filters;
+}
+
+function restoreCheckbox(input) {
+  input.checked = !input.disabled && (booleanFilters.includes(input.name)
+    ? savedFilters[input.name] === true
+    : Array.isArray(savedFilters[input.name]) && savedFilters[input.name].includes(input.value));
+}
+
+function saveFilterSettings() {
+  const filters = readFilters();
+  // APIから後で追加される地域の選択も、読み込み中の変更で失わないようにします。
+  for (const name of ["departure", "arrival"]) {
+    const visibleValues = new Set(Array.from(form.querySelectorAll(`input[name="${name}"]`), input => input.value));
+    filters[name].push(...(savedFilters[name] || []).filter(value => !visibleValues.has(value)));
+  }
+  savedFilters = filters;
+  try {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+  } catch {
+    // 保存できない環境でも、このページでの絞り込みは継続します。
+  }
+}
 
 function createOptions(containerId, name, values) {
   const container = document.getElementById(containerId);
@@ -23,6 +72,7 @@ function createOptions(containerId, name, values) {
       input.setAttribute("aria-describedby", "holiday-note");
       label.title = "APIには貸出日・返却日それぞれの祝日情報がありません";
     }
+    restoreCheckbox(input);
     label.append(input, document.createTextNode(value));
     container.append(label);
   });
@@ -131,11 +181,7 @@ function createCard(vehicle) {
 
 function render() {
   if (loadState !== "ready") return;
-  const data = new FormData(form);
-  const filters = {
-    availableOnly: data.has("availableOnly"), relatedRegions: data.has("relatedRegions"), includesDayOff: data.has("includesDayOff"),
-    departure: data.getAll("departure"), arrival: data.getAll("arrival"), rentalDay: data.getAll("rentalDay"), returnDay: data.getAll("returnDay"), excludedModel: data.getAll("excludedModel"),
-  };
+  const filters = readFilters();
   const matches = vehicles.filter(vehicle => matchesVehicle(vehicle, filters));
   document.querySelector("#vehicle-list").replaceChildren(...matches.map(createCard));
   document.querySelector("#result-count").replaceChildren(document.createTextNode("該当件数 "), element("strong", "", String(matches.length)), document.createTextNode(`件 / 全${total}件`));
@@ -194,6 +240,12 @@ async function loadVehicles() {
 
 function resetFilters() {
   form.reset();
+  savedFilters = {};
+  try {
+    localStorage.removeItem(FILTER_STORAGE_KEY);
+  } catch {
+    // 保存領域にアクセスできない場合も画面の初期化は実行します。
+  }
   render();
 }
 
@@ -202,15 +254,21 @@ createOptions("arrival-options", "arrival", regions);
 createOptions("rental-day-options", "rentalDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
 createOptions("return-day-options", "returnDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
 createOptions("excluded-model-options", "excludedModel", excludedModels);
-form.addEventListener("change", render);
+for (const input of form.querySelectorAll('input[type="checkbox"]')) restoreCheckbox(input);
+form.addEventListener("change", () => {
+  saveFilterSettings();
+  render();
+});
 form.addEventListener("submit", event => event.preventDefault());
 document.querySelector("#reset-filters").addEventListener("click", resetFilters);
 document.querySelector("#empty-reset").addEventListener("click", resetFilters);
 document.querySelector("#recommended").addEventListener("click", () => {
   form.reset();
+  savedFilters = {};
   for (const input of form.querySelectorAll('input[type="checkbox"]')) {
     input.checked = ["availableOnly", "relatedRegions", "includesDayOff", "excludedModel"].includes(input.name);
   }
+  saveFilterSettings();
   render();
 });
 document.querySelector("#retry-load").addEventListener("click", loadVehicles);

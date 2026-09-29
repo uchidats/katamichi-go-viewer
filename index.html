@@ -22,7 +22,7 @@
     </section>
 
     <section class="filter-panel" aria-labelledby="filter-title">
-      <div class="panel-heading"><h2 id="filter-title">条件から探す</h2><button type="button" id="reset-filters" class="text-button">条件をリセット</button></div>
+      <div class="panel-heading"><h2 id="filter-title">条件から探す</h2><button type="button" id="reset-filters" class="text-button">フィルターを初期化</button></div>
       <form id="filter-form">
         <div class="quick-options">
           <label class="availability-option"><input type="checkbox" name="availableOnly"> 利用可能のみ</label>
@@ -41,6 +41,7 @@
           <fieldset class="full-width"><legend>除外車種 <span>選択した車種を表示しません</span></legend><div id="excluded-model-options" class="choices"></div></fieldset>
         </div>
         <p class="filter-hint">未選択の項目はすべて表示。同じ項目内は「いずれか」、異なる項目間は「すべて一致」で絞り込みます。</p>
+        <p class="results-note">フィルター設定はこのブラウザに自動保存されます。「フィルターを初期化」で保存設定も削除します。</p>
         <p id="holiday-note" class="results-note">貸出日・返却日それぞれの祝日情報はAPIにないため、「祝」は選択できません。期間内の祝日は「土日祝を含む」で絞り込めます。</p>
       </form>
     </section>
