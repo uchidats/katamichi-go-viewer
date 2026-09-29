@@ -7,6 +7,19 @@ let loadState = "loading";
 
 const regions = ["北海道", "東北", "関東", "中部", "近畿", "中国・四国", "九州・沖縄"];
 const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+// 内閣府公表の国民の祝日・休日（振替休日・国民の休日を含む）。
+// https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html
+// 2026-09-30確認。2028年以降は内閣府の公表後に追記してください。
+const japaneseHolidays = new Set([
+  "2026-01-01", "2026-01-12", "2026-02-11", "2026-02-23", "2026-03-20",
+  "2026-04-29", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06",
+  "2026-07-20", "2026-08-11", "2026-09-21", "2026-09-22", "2026-09-23",
+  "2026-10-12", "2026-11-03", "2026-11-23",
+  "2027-01-01", "2027-01-11", "2027-02-11", "2027-02-23", "2027-03-21",
+  "2027-03-22", "2027-04-29", "2027-05-03", "2027-05-04", "2027-05-05",
+  "2027-07-19", "2027-08-11", "2027-09-20", "2027-09-23", "2027-10-11",
+  "2027-11-03", "2027-11-23",
+]);
 const excludedModels = ["アルファード", "ハイエース", "ヴォクシー"];
 const form = document.querySelector("#filter-form");
 const FILTER_STORAGE_KEY = "katamichi-go-viewer.filters.v1";
@@ -68,9 +81,7 @@ function createOptions(containerId, name, values) {
     input.name = name;
     input.value = value;
     if (value === "祝") {
-      input.disabled = true;
       input.setAttribute("aria-describedby", "holiday-note");
-      label.title = "APIには貸出日・返却日それぞれの祝日情報がありません";
     }
     restoreCheckbox(input);
     label.append(input, document.createTextNode(value));
@@ -86,7 +97,10 @@ function parseDate(value) {
 
 function matchesDay(value, selectedDays) {
   const date = parseDate(value);
-  return selectedDays.length === 0 || (date !== null && selectedDays.includes(weekdays[date.getUTCDay()]));
+  return selectedDays.length === 0 || (date !== null && (
+    selectedDays.includes(weekdays[date.getUTCDay()])
+    || (selectedDays.includes("祝") && japaneseHolidays.has(value))
+  ));
 }
 
 function isTrue(value) {
@@ -266,7 +280,8 @@ document.querySelector("#recommended").addEventListener("click", () => {
   form.reset();
   savedFilters = {};
   for (const input of form.querySelectorAll('input[type="checkbox"]')) {
-    input.checked = ["availableOnly", "relatedRegions", "includesDayOff", "excludedModel"].includes(input.name);
+    input.checked = ["availableOnly", "relatedRegions", "excludedModel"].includes(input.name)
+      || (["rentalDay", "returnDay"].includes(input.name) && ["土", "日", "祝"].includes(input.value));
   }
   saveFilterSettings();
   render();
