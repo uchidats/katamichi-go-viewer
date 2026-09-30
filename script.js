@@ -193,8 +193,12 @@ function createCard(vehicle) {
     detail.append(element("span", "", displayText(region, "地域不明")));
     if (label === "返却" && Array.isArray(vehicle.returnCandidates)) {
       const candidates = vehicle.returnCandidates
-        .map(candidate => displayText(typeof candidate === "string" ? candidate : candidate?.name ?? candidate?.storeName, ""))
-        .filter(Boolean);
+        .map(candidate => ({
+          name: displayText(typeof candidate === "string" ? candidate : candidate?.name ?? candidate?.storeName, ""),
+          prefecture: displayText(candidate?.prefecture, ""),
+          address: displayText(candidate?.address, ""),
+        }))
+        .filter(candidate => candidate.name);
       if (candidates.length > 0) {
         // detailsの開閉はカード内で完結し、フィルターや保存設定には触れません。
         const disclosure = element("details", "return-candidates");
@@ -203,7 +207,21 @@ function createCard(vehicle) {
         arrow.setAttribute("aria-hidden", "true");
         summary.append(document.createTextNode("返却可能店舗を見る"), arrow);
         const list = element("ul", "return-candidates-list");
-        candidates.forEach(name => list.append(element("li", "", name)));
+        candidates.forEach(({ name, prefecture, address }) => {
+          const query = (address ? [name, prefecture, address] : ["トヨタレンタカー", name, prefecture])
+            .filter(Boolean).join(" ");
+          const link = element("a", "return-candidate-link", name);
+          link.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.setAttribute("aria-label", `${name}をGoogle Mapsで検索（新しいタブ）`);
+          const external = element("span", "return-candidate-external", "↗");
+          external.setAttribute("aria-hidden", "true");
+          link.append(external);
+          const item = element("li");
+          item.append(link);
+          list.append(item);
+        });
         disclosure.append(summary, list);
         detail.append(disclosure);
       }
