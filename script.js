@@ -201,9 +201,6 @@ function createCard(vehicle) {
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.setAttribute("aria-label", `${name}をGoogle Mapsで検索（新しいタブ）`);
-      const external = element("span", "departure-store-external", "↗");
-      external.setAttribute("aria-hidden", "true");
-      link.append(external);
       detail.replaceChildren(link);
     }
     detail.append(element("span", "", displayText(region, "地域不明")));

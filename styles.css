@@ -69,7 +69,6 @@ legend span { color: var(--muted); font-size: 11px; font-weight: 400; margin-lef
 .departure-store-link { display: flex; align-items: center; gap: 6px; min-height: 44px; border-radius: 6px; color: var(--blue); text-underline-offset: 3px; touch-action: manipulation; }
 .departure-store-link:hover { background: var(--pale); }
 .departure-store-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.departure-store-external { flex-shrink: 0; font-size: 11px; font-weight: 400; }
 .return-candidates { margin-top: 12px; }
 .return-candidates-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 4px 0; border-radius: 6px; color: var(--blue); font-size: 13px; font-weight: 600; list-style: none; cursor: pointer; touch-action: manipulation; }
 .return-candidates-toggle::-webkit-details-marker { display: none; }
