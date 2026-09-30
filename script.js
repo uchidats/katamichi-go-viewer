@@ -191,6 +191,23 @@ function createCard(vehicle) {
   [["出発", vehicle.startStore, vehicle.startRegion], ["返却", vehicle.returnStore, vehicle.returnRegion]].forEach(([label, store, region]) => {
     const detail = element("dd", "", displayText(store));
     detail.append(element("span", "", displayText(region, "地域不明")));
+    if (label === "返却" && Array.isArray(vehicle.returnCandidates)) {
+      const candidates = vehicle.returnCandidates
+        .map(candidate => displayText(typeof candidate === "string" ? candidate : candidate?.name ?? candidate?.storeName, ""))
+        .filter(Boolean);
+      if (candidates.length > 0) {
+        // detailsの開閉はカード内で完結し、フィルターや保存設定には触れません。
+        const disclosure = element("details", "return-candidates");
+        const summary = element("summary", "return-candidates-toggle");
+        const arrow = element("span", "filter-arrow", "▾");
+        arrow.setAttribute("aria-hidden", "true");
+        summary.append(document.createTextNode("返却可能店舗を見る"), arrow);
+        const list = element("ul", "return-candidates-list");
+        candidates.forEach(name => list.append(element("li", "", name)));
+        disclosure.append(summary, list);
+        detail.append(disclosure);
+      }
+    }
     route.append(element("dt", "", label), detail);
   });
   const period = element("p", "period");
