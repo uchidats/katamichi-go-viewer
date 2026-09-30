@@ -66,16 +66,19 @@ legend span { color: var(--muted); font-size: 11px; font-weight: 400; margin-lef
 .route dt { font-size: 10px; color: var(--muted); padding-top: 4px; }
 .route dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .route dd > span { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+.departure-store-link { display: flex; align-items: center; gap: 6px; min-height: 44px; border-radius: 6px; color: var(--blue); text-underline-offset: 3px; touch-action: manipulation; }
+.departure-store-link:hover { background: var(--pale); }
+.departure-store-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.departure-store-external { flex-shrink: 0; font-size: 11px; font-weight: 400; }
 .return-candidates { margin-top: 12px; }
 .return-candidates-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 4px 0; border-radius: 6px; color: var(--blue); font-size: 13px; font-weight: 600; list-style: none; cursor: pointer; touch-action: manipulation; }
 .return-candidates-toggle::-webkit-details-marker { display: none; }
 .return-candidates:not([open]) .filter-arrow { transform: rotate(0deg); }
 .return-candidates-list { margin: 10px 0 0; padding-left: 1.4em; font-size: 13px; font-weight: 400; }
-.return-candidates-list li { padding-block: 4px; overflow-wrap: anywhere; }
-.return-candidate-link { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px; border-radius: 6px; color: var(--blue); text-underline-offset: 3px; touch-action: manipulation; }
+.return-candidates-list li { padding-block: 0; overflow-wrap: anywhere; }
+.return-candidate-link { display: flex; align-items: center; min-height: 32px; padding: 2px 8px; border-radius: 6px; color: var(--blue); line-height: 20px; text-underline-offset: 3px; touch-action: manipulation; }
 .return-candidate-link:hover { background: var(--pale); }
 .return-candidate-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.return-candidate-external { flex-shrink: 0; font-size: 11px; }
 .period { padding: 13px 20px; margin: 0; border-top: 1px solid #e9eef5; background: #f8fafd; font-size: 13px; }
 .period-label { display: block; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
 .period time { display: inline-block; }

@@ -190,6 +190,22 @@ function createCard(vehicle) {
   const route = element("dl", "route");
   [["出発", vehicle.startStore, vehicle.startRegion], ["返却", vehicle.returnStore, vehicle.returnRegion]].forEach(([label, store, region]) => {
     const detail = element("dd", "", displayText(store));
+    if (label === "出発" && displayText(store, "")) {
+      const name = displayText(store);
+      const prefecture = displayText(vehicle.startPrefecture, "");
+      const address = displayText(vehicle.startAddress, "");
+      const query = (address ? [name, prefecture, address] : ["トヨタレンタカー", name, prefecture])
+        .filter(Boolean).join(" ");
+      const link = element("a", "departure-store-link", name);
+      link.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", `${name}をGoogle Mapsで検索（新しいタブ）`);
+      const external = element("span", "departure-store-external", "↗");
+      external.setAttribute("aria-hidden", "true");
+      link.append(external);
+      detail.replaceChildren(link);
+    }
     detail.append(element("span", "", displayText(region, "地域不明")));
     if (label === "返却" && Array.isArray(vehicle.returnCandidates)) {
       const candidates = vehicle.returnCandidates
@@ -215,9 +231,6 @@ function createCard(vehicle) {
           link.target = "_blank";
           link.rel = "noopener noreferrer";
           link.setAttribute("aria-label", `${name}をGoogle Mapsで検索（新しいタブ）`);
-          const external = element("span", "return-candidate-external", "↗");
-          external.setAttribute("aria-hidden", "true");
-          link.append(external);
           const item = element("li");
           item.append(link);
           list.append(item);
