@@ -26,8 +26,9 @@ const FILTER_STORAGE_KEY = "katamichi-go-viewer.filters.v1";
 const booleanFilters = ["availableOnly", "relatedRegions", "includesDayOff"];
 const listFilters = ["departure", "arrival", "rentalDay", "returnDay", "excludedModel"];
 let savedFilters = loadFilterSettings();
+let restoringFilters = false;
 
-function loadFilterSettings() {
+function loadFilterSettings(fallback = {}) {
   try {
     const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY));
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
@@ -39,7 +40,7 @@ function loadFilterSettings() {
     return settings;
   } catch {
     // 保存データの破損やストレージの利用制限があっても通常表示を続けます。
-    return {};
+    return fallback;
   }
 }
 
@@ -57,7 +58,19 @@ function restoreCheckbox(input) {
     : Array.isArray(savedFilters[input.name]) && savedFilters[input.name].includes(input.value));
 }
 
+function restoreFilterSettings() {
+  // ブラウザのフォーム復元やAPIによる選択肢追加の後も、保存設定を正とします。
+  // 復元ではlocalStorageに書き込まず、初期値による上書きを防ぎます。
+  restoringFilters = true;
+  try {
+    for (const input of form.querySelectorAll('input[type="checkbox"]')) restoreCheckbox(input);
+  } finally {
+    restoringFilters = false;
+  }
+}
+
 function saveFilterSettings() {
+  if (restoringFilters) return;
   const filters = readFilters();
   // APIから後で追加される地域の選択も、読み込み中の変更で失わないようにします。
   for (const name of ["departure", "arrival"]) {
@@ -231,6 +244,7 @@ async function loadVehicles() {
       const extra = [...new Set(vehicles.map(item => item[key]).filter(region => typeof region === "string" && region && !existing.has(region)))];
       createOptions(containerId, name, extra);
     }
+    restoreFilterSettings();
     const updated = typeof data.updatedAt === "string" && data.updatedAt ? new Date(data.updatedAt) : new Date(NaN);
     document.querySelector("#updated-at").textContent = Number.isNaN(updated.getTime())
       ? "最終更新：不明"
@@ -253,8 +267,8 @@ async function loadVehicles() {
 }
 
 function resetFilters() {
-  form.reset();
   savedFilters = {};
+  restoreFilterSettings();
   try {
     localStorage.removeItem(FILTER_STORAGE_KEY);
   } catch {
@@ -268,14 +282,33 @@ createOptions("arrival-options", "arrival", regions);
 createOptions("rental-day-options", "rentalDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
 createOptions("return-day-options", "returnDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
 createOptions("excluded-model-options", "excludedModel", excludedModels);
-for (const input of form.querySelectorAll('input[type="checkbox"]')) restoreCheckbox(input);
-form.addEventListener("change", () => {
+restoreFilterSettings();
+form.addEventListener("change", event => {
+  if (restoringFilters || event.target.type !== "checkbox") return;
+  // 変更された項目だけを反映し、他の項目のブラウザ復元状態で保存値を上書きしません。
+  const input = event.target;
+  if (booleanFilters.includes(input.name)) {
+    savedFilters[input.name] = input.checked;
+  } else if (listFilters.includes(input.name)) {
+    const values = new Set(savedFilters[input.name] || []);
+    if (input.checked) values.add(input.value);
+    else values.delete(input.value);
+    savedFilters[input.name] = [...values];
+  } else {
+    return;
+  }
+  restoreFilterSettings();
   saveFilterSettings();
   render();
 });
 form.addEventListener("submit", event => event.preventDefault());
 document.querySelector("#reset-filters").addEventListener("click", resetFilters);
-document.querySelector("#empty-reset").addEventListener("click", resetFilters);
+document.querySelector("#empty-reset").addEventListener("click", () => {
+  savedFilters = {};
+  restoreFilterSettings();
+  saveFilterSettings();
+  render();
+});
 document.querySelector("#recommended").addEventListener("click", () => {
   form.reset();
   savedFilters = {};
@@ -287,4 +320,11 @@ document.querySelector("#recommended").addEventListener("click", () => {
   render();
 });
 document.querySelector("#retry-load").addEventListener("click", loadVehicles);
+// pull-to-refresh、F5、履歴キャッシュからの復帰でブラウザがフォーム状態を
+// 再適用した後に復元します。APIの完了順序に関係なく、保存値を上書きしません。
+window.addEventListener("pageshow", () => {
+  savedFilters = loadFilterSettings(savedFilters);
+  restoreFilterSettings();
+  render();
+});
 loadVehicles();
