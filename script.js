@@ -29,6 +29,66 @@ let savedFilters = loadFilterSettings();
 let restoringFilters = false;
 const FILTER_PANEL_STORAGE_KEY = "katamichi-go-viewer.filtersCollapsed.v1";
 let filtersCollapsed = false;
+const HIDDEN_VEHICLES_STORAGE_KEY = "katamichi-go-viewer.hiddenVehicles.v1";
+let hiddenVehicles = loadHiddenVehicles();
+const showHiddenVehicles = document.querySelector("#show-hidden-vehicles");
+showHiddenVehicles.checked = false;
+showHiddenVehicles.addEventListener("change", render);
+document.querySelector("#clear-hidden-vehicles").addEventListener("click", () => {
+  hiddenVehicles = [];
+  saveHiddenVehicles("非表示設定をすべて解除しました。");
+  render();
+});
+
+function loadHiddenVehicles(fallback = []) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(HIDDEN_VEHICLES_STORAGE_KEY));
+    return Array.isArray(stored) ? stored.filter(entry => entry
+      && typeof entry.vehicleKey === "string" && entry.vehicleKey
+      && parseDate(entry.startDate) && parseDate(entry.endDate)) : [];
+  } catch {
+    return fallback;
+  }
+}
+
+function hiddenVehicleEntry(vehicle) {
+  if (![vehicle.car, vehicle.startStore, vehicle.returnStore].every(value => displayText(value, ""))
+    || !parseDate(vehicle.startDate) || !parseDate(vehicle.endDate)) return null;
+  return {
+    vehicleKey: JSON.stringify([vehicle.car, vehicle.startStore, vehicle.returnStore]),
+    startDate: vehicle.startDate,
+    endDate: vehicle.endDate,
+  };
+}
+
+function sameHiddenVehicle(a, b) {
+  return a && b && a.vehicleKey === b.vehicleKey && a.startDate === b.startDate && a.endDate === b.endDate;
+}
+
+function isHiddenVehicle(vehicle) {
+  const entry = hiddenVehicleEntry(vehicle);
+  return hiddenVehicles.some(saved => sameHiddenVehicle(saved, entry));
+}
+
+function saveHiddenVehicles(message) {
+  try {
+    if (hiddenVehicles.length) localStorage.setItem(HIDDEN_VEHICLES_STORAGE_KEY, JSON.stringify(hiddenVehicles));
+    else localStorage.removeItem(HIDDEN_VEHICLES_STORAGE_KEY);
+  } catch {
+    message = "非表示設定を保存できませんでした。このページ内でのみ適用されます。";
+  }
+  document.querySelector("#hidden-vehicle-message").textContent = message;
+}
+
+function toggleHiddenVehicle(vehicle) {
+  const entry = hiddenVehicleEntry(vehicle);
+  if (!entry) return;
+  const hidden = isHiddenVehicle(vehicle);
+  hiddenVehicles = hiddenVehicles.filter(saved => !sameHiddenVehicle(saved, entry));
+  if (!hidden) hiddenVehicles.push(entry);
+  saveHiddenVehicles(hidden ? "非表示を解除しました。" : "この期間の案件を非表示にしました。「非表示にした車両を表示」から解除できます。");
+  render();
+}
 
 function applyFilterPanelState() {
   document.querySelector("#filter-content").hidden = filtersCollapsed;
@@ -184,9 +244,11 @@ function element(tag, className, text) {
 
 function createCard(vehicle) {
   const available = isTrue(vehicle.available);
-  const card = element("article", `vehicle-card${available ? "" : " unavailable"}`);
+  const hidden = isHiddenVehicle(vehicle);
+  const card = element("article", `vehicle-card${available ? "" : " unavailable"}${hidden ? " hidden-vehicle" : ""}`);
   const heading = element("div", "card-top");
   heading.append(element("h3", "", displayText(vehicle.car, "車種不明")), element("span", "status", available ? "● 利用可能" : "利用不可"));
+  if (hidden) heading.append(element("span", "hidden-vehicle-badge", "この期間は非表示に設定済み"));
   const route = element("dl", "route");
   [["出発", vehicle.startStore, vehicle.startRegion], ["返却", vehicle.returnStore, vehicle.returnRegion]].forEach(([label, store, region]) => {
     const detail = element("dd", "", displayText(store));
@@ -275,6 +337,12 @@ function createCard(vehicle) {
   } else {
     actions.append(element("span", "results-note", "元サイトのURLがありません"));
   }
+  const hideButton = element("button", "text-button hide-vehicle-button", hidden ? "非表示を解除" : "この期間は表示しない");
+  hideButton.type = "button";
+  hideButton.disabled = !hiddenVehicleEntry(vehicle);
+  if (hideButton.disabled) hideButton.title = "店舗・利用期間の情報が不足しているため非表示にできません";
+  hideButton.addEventListener("click", () => toggleHiddenVehicle(vehicle));
+  actions.append(hideButton);
   card.append(heading, route, period, details, actions);
   return card;
 }
@@ -282,7 +350,8 @@ function createCard(vehicle) {
 function render() {
   if (loadState !== "ready") return;
   const filters = readFilters();
-  const matches = vehicles.filter(vehicle => matchesVehicle(vehicle, filters));
+  const matches = vehicles.filter(vehicle => matchesVehicle(vehicle, filters)
+    && (showHiddenVehicles.checked || !isHiddenVehicle(vehicle)));
   document.querySelector("#vehicle-list").replaceChildren(...matches.map(createCard));
   document.querySelector("#result-count").replaceChildren(document.createTextNode("該当件数 "), element("strong", "", String(matches.length)), document.createTextNode(`件 / 全${total}件`));
   document.querySelector("#empty-state").hidden = matches.length > 0;
@@ -396,6 +465,7 @@ document.querySelector("#retry-load").addEventListener("click", loadVehicles);
 // pull-to-refresh、F5、履歴キャッシュからの復帰でブラウザがフォーム状態を
 // 再適用した後に復元します。APIの完了順序に関係なく、保存値を上書きしません。
 window.addEventListener("pageshow", () => {
+  hiddenVehicles = loadHiddenVehicles(hiddenVehicles);
   restoreFilterPanelState();
   savedFilters = loadFilterSettings(savedFilters);
   restoreFilterSettings();

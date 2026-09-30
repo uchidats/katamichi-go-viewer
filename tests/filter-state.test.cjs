@@ -8,6 +8,7 @@ const script = fs.readFileSync(path.join(__dirname, "../script.js"), "utf8");
 const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
 const storageKey = "katamichi-go-viewer.filters.v1";
 const panelStorageKey = "katamichi-go-viewer.filtersCollapsed.v1";
+const hiddenStorageKey = "katamichi-go-viewer.hiddenVehicles.v1";
 const settings = {
   availableOnly: true, relatedRegions: true, includesDayOff: false,
   departure: ["関東"], arrival: ["東北"], rentalDay: ["土", "日", "祝"],
@@ -106,6 +107,83 @@ function launch(storage = new Map([[storageKey, JSON.stringify(settings)]])) {
   };
   return app;
 }
+
+function hideAction(app, index = 0) {
+  return app.nodes["vehicle-list"].children[index].querySelectorAll("*")
+    .find(node => node.className === "text-button hide-vehicle-button");
+}
+
+function showHidden(app, checked) {
+  app.nodes["show-hidden-vehicles"].checked = checked;
+  app.nodes["show-hidden-vehicles"].handlers.change();
+}
+
+test("hidden periods persist, can be reviewed and individually restored without changing filters", async () => {
+  const app = launch();
+  await app.respond();
+  const filtersBefore = app.storage.get(storageKey);
+  hideAction(app).handlers.click();
+  assert.equal(app.nodes["vehicle-list"].children.length, 0);
+  assert.equal(app.nodes["empty-state"].hidden, false);
+  assert.deepEqual(JSON.parse(app.storage.get(hiddenStorageKey)), [{
+    vehicleKey: JSON.stringify([item.car, item.startStore, item.returnStore]),
+    startDate: item.startDate, endDate: item.endDate,
+  }]);
+  const reloaded = launch(app.storage);
+  await reloaded.respond();
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 0);
+  showHidden(reloaded, true);
+  assert.match(reloaded.nodes["vehicle-list"].children[0].className, /hidden-vehicle/);
+  assert.equal(hideAction(reloaded).textContent, "非表示を解除");
+  hideAction(reloaded).handlers.click();
+  showHidden(reloaded, false);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
+  assert.equal(reloaded.storage.has(hiddenStorageKey), false);
+  assert.equal(reloaded.storage.get(storageKey), filtersBefore);
+});
+
+test("changing either date or any identity field makes a hidden vehicle visible again", async () => {
+  const app = launch(new Map());
+  await app.respond();
+  hideAction(app).handlers.click();
+  const changed = [
+    { ...item, startDate: "2026-10-11" }, { ...item, endDate: "2026-10-17" },
+    { ...item, car: "別の車両" }, { ...item, startStore: "別の出発店舗" },
+    { ...item, returnStore: "別の返却店舗" },
+  ];
+  const reloaded = launch(app.storage);
+  await reloaded.respond([item, ...changed]);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, changed.length);
+  showHidden(reloaded, true);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, changed.length + 1);
+});
+
+test("clear all removes only hidden settings and filter resets keep hidden periods", async () => {
+  const app = launch();
+  await app.respond();
+  hideAction(app).handlers.click();
+  const hiddenBefore = app.storage.get(hiddenStorageKey);
+  app.click("reset-filters");
+  assert.equal(app.storage.get(hiddenStorageKey), hiddenBefore);
+  assert.equal(app.nodes["vehicle-list"].children.length, 0);
+  app.click("recommended");
+  const filtersBefore = app.storage.get(storageKey);
+  app.storage.set(panelStorageKey, "true");
+  app.click("clear-hidden-vehicles");
+  assert.equal(app.storage.has(hiddenStorageKey), false);
+  assert.equal(app.storage.get(storageKey), filtersBefore);
+  assert.equal(app.storage.get(panelStorageKey), "true");
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+});
+
+test("malformed hidden settings and missing dates do not hide unrelated vehicles", async () => {
+  for (const stored of ["invalid JSON", "{}", '[null, {"vehicleKey":"x"}]']) {
+    const app = launch(new Map([[hiddenStorageKey, stored]]));
+    await app.respond([item, { ...item, startDate: null }]);
+    assert.equal(app.nodes["vehicle-list"].children.length, 2);
+    assert.equal(hideAction(app, 1).disabled, true);
+  }
+});
 
 for (const apiFirst of [false, true]) {
   test(`reload preserves settings with ${apiFirst ? "API" : "pageshow"} completing first`, async () => {

@@ -46,6 +46,12 @@
         <p class="results-note">フィルター設定はこのブラウザに自動保存されます。「フィルターを初期化」で保存設定も削除します。</p>
         <p id="holiday-note" class="results-note">「祝」は日本の祝日・振替休日・国民の休日が対象です（2026〜2027年の公表分に対応）。貸出日・返却日をそれぞれ判定します。</p>
       </form>
+      <div class="hidden-vehicle-controls">
+        <label><input type="checkbox" id="show-hidden-vehicles" autocomplete="off"> 非表示にした車両を表示</label>
+        <button type="button" id="clear-hidden-vehicles" class="text-button">非表示設定をすべて解除</button>
+        <p class="results-note">非表示は同じ車両・店舗・利用期間にのみ適用されます。利用期間が変わると再表示されます。非表示案件の確認にも現在のフィルター条件が適用されます。</p>
+        <p id="hidden-vehicle-message" class="results-note" role="status" aria-live="polite"></p>
+      </div>
       </div>
     </section>
 

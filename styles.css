@@ -58,6 +58,14 @@ legend span { color: var(--muted); font-size: 11px; font-weight: 400; margin-lef
 .results-note { color: var(--muted); font-size: 11px; margin: 8px 0 18px; }
 .vehicle-grid { display: grid; gap: 16px; }
 .vehicle-card { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.hidden-vehicle { background: #f8fafd; border-style: dashed; }
+.hidden-vehicle > :not(.card-actions) { opacity: .65; }
+.hidden-vehicle-badge { font-size: 12px; color: var(--muted); }
+.hidden-vehicle-controls { border-top: 1px solid var(--border); padding-top: 12px; }
+.hidden-vehicle-controls label { min-height: 44px; font-size: 13px; }
+.hidden-vehicle-controls .results-note { margin-bottom: 0; }
+.hide-vehicle-button { display: block; width: 100%; margin-top: 8px; padding-inline: 0; }
+.hide-vehicle-button:disabled { color: var(--muted); cursor: default; }
 .card-top { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 20px 0; }
 .vehicle-card h3 { font-size: 20px; margin: 0; overflow-wrap: anywhere; }
 .status { font-size: 11px; font-weight: 650; border-radius: 20px; padding: 4px 10px; white-space: nowrap; color: #156449; background: #eaf6ef; }
