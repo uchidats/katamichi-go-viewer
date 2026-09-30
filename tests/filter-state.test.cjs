@@ -7,6 +7,7 @@ const { test } = require("node:test");
 const script = fs.readFileSync(path.join(__dirname, "../script.js"), "utf8");
 const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
 const storageKey = "katamichi-go-viewer.filters.v1";
+const panelStorageKey = "katamichi-go-viewer.filtersCollapsed.v1";
 const settings = {
   availableOnly: true, relatedRegions: true, includesDayOff: false,
   departure: ["関東"], arrival: ["東北"], rentalDay: ["土", "日", "祝"],
@@ -203,4 +204,45 @@ test("API errors and retries leave saved filters intact", async () => {
   assert.deepEqual(app.filters(), settings);
   assert.deepEqual(app.writes, []);
   assert.deepEqual(app.removals, []);
+});
+
+test("collapse survives reload and API completion without changing filters or cards", async () => {
+  const app = launch();
+  assert.equal(app.nodes["filter-content"].hidden, false);
+  const stored = app.storage.get(storageKey);
+  app.click("filter-toggle");
+  assert.equal(app.nodes["filter-content"].hidden, true);
+  assert.equal(app.nodes["filter-toggle"].attributes["aria-expanded"], "false");
+  assert.equal(app.storage.get(panelStorageKey), "true");
+  assert.deepEqual(app.filters(), settings);
+  assert.equal(app.storage.get(storageKey), stored);
+  assert.deepEqual(app.writes, [panelStorageKey]);
+
+  const reloaded = launch(app.storage);
+  assert.equal(reloaded.nodes["filter-content"].hidden, true);
+  await reloaded.respond();
+  reloaded.show(false);
+  assert.equal(reloaded.nodes["filter-content"].hidden, true);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
+  assert.deepEqual(reloaded.filters(), settings);
+  reloaded.click("filter-toggle");
+  assert.equal(reloaded.nodes["filter-content"].hidden, false);
+  assert.equal(reloaded.nodes["filter-toggle"].attributes["aria-expanded"], "true");
+  assert.equal(reloaded.storage.get(storageKey), stored);
+  assert.equal(launch(reloaded.storage).nodes["filter-content"].hidden, false);
+});
+
+test("filter initialization leaves panel preference intact and history restores it", async () => {
+  const app = launch();
+  app.click("filter-toggle");
+  app.click("filter-toggle");
+  app.click("reset-filters");
+  assert.equal(app.storage.get(panelStorageKey), "false");
+  assert.equal(app.storage.has(storageKey), false);
+  app.storage.set(panelStorageKey, "true");
+  app.show(true);
+  assert.equal(app.nodes["filter-content"].hidden, true);
+  await app.respond();
+  assert.ok(app.inputs().every(input => !input.checked));
+  assert.equal(app.storage.has(storageKey), false);
 });

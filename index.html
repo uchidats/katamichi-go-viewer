@@ -22,7 +22,9 @@
     </section>
 
     <section class="filter-panel" aria-labelledby="filter-title">
-      <div class="panel-heading"><h2 id="filter-title">条件から探す</h2><button type="button" id="reset-filters" class="text-button">フィルターを初期化</button></div>
+      <h2 id="filter-title"><button type="button" id="filter-toggle" class="filter-toggle" aria-expanded="true" aria-controls="filter-content">条件から探す <span class="filter-arrow" aria-hidden="true">▾</span></button></h2>
+      <div id="filter-content" class="filter-content">
+      <div class="filter-actions"><button type="button" id="reset-filters" class="text-button">フィルターを初期化</button></div>
       <form id="filter-form" autocomplete="off">
         <div class="quick-options">
           <label class="availability-option"><input type="checkbox" name="availableOnly"> 利用可能のみ</label>
@@ -44,6 +46,7 @@
         <p class="results-note">フィルター設定はこのブラウザに自動保存されます。「フィルターを初期化」で保存設定も削除します。</p>
         <p id="holiday-note" class="results-note">「祝」は日本の祝日・振替休日・国民の休日が対象です（2026〜2027年の公表分に対応）。貸出日・返却日をそれぞれ判定します。</p>
       </form>
+      </div>
     </section>
 
     <section class="results" aria-labelledby="results-title">

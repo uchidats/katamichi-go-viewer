@@ -27,6 +27,34 @@ const booleanFilters = ["availableOnly", "relatedRegions", "includesDayOff"];
 const listFilters = ["departure", "arrival", "rentalDay", "returnDay", "excludedModel"];
 let savedFilters = loadFilterSettings();
 let restoringFilters = false;
+const FILTER_PANEL_STORAGE_KEY = "katamichi-go-viewer.filtersCollapsed.v1";
+let filtersCollapsed = false;
+
+function applyFilterPanelState() {
+  document.querySelector("#filter-content").hidden = filtersCollapsed;
+  document.querySelector("#filter-toggle").setAttribute("aria-expanded", String(!filtersCollapsed));
+}
+
+function restoreFilterPanelState() {
+  try {
+    filtersCollapsed = localStorage.getItem(FILTER_PANEL_STORAGE_KEY) === "true";
+  } catch {
+    // 保存できない環境でも、このページ内での開閉は利用できます。
+  }
+  applyFilterPanelState();
+}
+
+// フィルター設定とは別に表示状態だけを保存し、チェック値には触れません。
+restoreFilterPanelState();
+document.querySelector("#filter-toggle").addEventListener("click", () => {
+  filtersCollapsed = !filtersCollapsed;
+  applyFilterPanelState();
+  try {
+    localStorage.setItem(FILTER_PANEL_STORAGE_KEY, String(filtersCollapsed));
+  } catch {
+    // ストレージの利用制限があっても開閉操作は継続します。
+  }
+});
 
 function loadFilterSettings(fallback = {}) {
   try {
@@ -323,6 +351,7 @@ document.querySelector("#retry-load").addEventListener("click", loadVehicles);
 // pull-to-refresh、F5、履歴キャッシュからの復帰でブラウザがフォーム状態を
 // 再適用した後に復元します。APIの完了順序に関係なく、保存値を上書きしません。
 window.addEventListener("pageshow", () => {
+  restoreFilterPanelState();
   savedFilters = loadFilterSettings(savedFilters);
   restoreFilterSettings();
   render();
