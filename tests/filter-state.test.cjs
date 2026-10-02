@@ -14,6 +14,7 @@ const settings = {
   departure: ["関東"], arrival: ["東北"], rentalDay: ["土", "日", "祝"],
   excludedModel: ["アルファード", "ハイエース", "ヴォクシー"],
   route: [],
+  model: [],
 };
 const item = {
   car: "ヤリス", available: true, startRegion: "関東", returnRegion: "東北",
@@ -86,14 +87,15 @@ function launch(storage = new Map([[storageKey, JSON.stringify(settings)]])) {
   vm.runInContext(script, context);
   const app = {
     nodes, storage, writes, removals,
-    inputs: () => [...form.querySelectorAll("input"), ...nodes["route-options"].querySelectorAll("input")],
+    inputs: () => [...form.querySelectorAll("input"), ...nodes["route-options"].querySelectorAll("input"),
+      ...nodes["model-options"].querySelectorAll("input")],
     filters: () => JSON.parse(vm.runInContext("JSON.stringify(readFilters())", context)),
     show: persisted => lifecycle.pageshow({ persisted }),
     change(name, value, checked) {
       const input = app.inputs().find(input => input.name === name && (value === undefined || input.value === value));
       assert.ok(input, `Missing input: ${name}/${value}`);
       input.checked = checked;
-      (name === "route" ? nodes["route-options"] : form).handlers.change({ target: input });
+      (["route", "model"].includes(name) ? nodes[`${name}-options`] : form).handlers.change({ target: input });
     },
     click: id => nodes[id].handlers.click(),
     async respond(items = [item]) {
@@ -125,6 +127,119 @@ function routeOptions(app) {
     name: label.children[1].textContent, count: label.children[2].textContent,
   }));
 }
+
+function modelOptions(app) {
+  return app.nodes["model-options"].children.map(label => ({
+    value: label.children[0].value, checked: label.children[0].checked,
+    name: label.children[1].textContent, count: label.children[2].textContent,
+  }));
+}
+
+test("model counts normalize only typography and vehicle numbers and preserve first occurrence order", async () => {
+  const app = launch();
+  await app.respond([
+    "ルーミー 車両番号1631", "ヤリス 車両番号山形500わ9925", "アクア 宮城502わ6507",
+    "ヤリス 4227", "カローラＨＶ 宮城300わ6564", "カローラHV 車両番号 123",
+    "ヤリスHV 仙台502わ･368", "ヤリスHEV", "カローラ", "カローラツーリング",
+    "　ｱｸｱ　車両番号　3674　", "シエンタ 登録番号9305", "GR86 車両番号 3771",
+    "ランドクルーザー 300", "アクア 車両番号 0427",
+  ].map(car => ({ ...item, car })));
+  assert.deepEqual(modelOptions(app).map(option => [option.name, option.count]), [
+    ["ルーミー", "1台"], ["ヤリス", "2台"], ["アクア", "3台"], ["カローラHV", "2台"],
+    ["ヤリスHV", "1台"], ["ヤリスHEV", "1台"], ["カローラ", "1台"], ["カローラツーリング", "1台"],
+    ["シエンタ", "1台"], ["GR86", "1台"], ["ランドクルーザー 300", "1台"],
+  ]);
+  assert.equal(app.nodes["vehicle-list"].children[0].children[0].children[0].textContent, "ルーミー 車両番号1631");
+});
+
+test("single and multiple model selections use OR without changing their own counts", async () => {
+  const app = launch();
+  const fixtures = ["ヤリス 車両番号123", "アクア", "ヤリス 青森501わ3175", "ルーミー"]
+    .map(car => ({ ...item, car }));
+  await app.respond(fixtures);
+  const before = modelOptions(app).map(({ checked, ...option }) => option);
+  app.change("model", "ヤリス", true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 2);
+  assert.deepEqual(modelOptions(app).map(({ checked, ...option }) => option), before);
+  app.change("model", "アクア", true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 3);
+  assert.deepEqual(modelOptions(app).map(({ checked, ...option }) => option), before);
+  app.change("model", "ヤリス", false);
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+  app.change("model", "アクア", false);
+  assert.equal(app.nodes["vehicle-list"].children.length, 4);
+});
+
+test("model selections restore after reload, history and loading changes, and reset normally", async () => {
+  const app = launch();
+  const fixtures = ["ヤリス", "アクア", "ルーミー"].map(car => ({ ...item, car }));
+  await app.respond(fixtures);
+  app.change("model", "アクア", true);
+  app.change("model", "ルーミー", true);
+  const reloaded = launch(app.storage);
+  reloaded.change("availableOnly", undefined, false);
+  reloaded.show(false);
+  await reloaded.respond(fixtures);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 2);
+  assert.deepEqual(reloaded.filters().model, ["アクア", "ルーミー"]);
+  reloaded.storage.set(storageKey, JSON.stringify({ ...settings, model: ["ヤリス"] }));
+  reloaded.inputs().forEach(input => { input.checked = false; });
+  reloaded.show(true);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
+  assert.equal(modelOptions(reloaded).find(option => option.checked).name, "ヤリス");
+  reloaded.click("recommended");
+  assert.deepEqual(reloaded.filters().model, []);
+  reloaded.change("model", "ヤリス", true);
+  reloaded.click("empty-reset");
+  assert.deepEqual(reloaded.filters().model, []);
+  reloaded.change("model", "アクア", true);
+  reloaded.click("reset-filters");
+  assert.equal(reloaded.storage.has(storageKey), false);
+  assert.deepEqual(reloaded.filters().model, []);
+});
+
+test("model and route facets exclude only themselves and respect regions, weekdays, exclusions and hidden vehicles", async () => {
+  const fixtures = [
+    { ...item, car: "ヤリス", startCompany: "トヨタレンタリース青森", returnCandidates: [{ name: "A", company: "トヨタレンタリース岩手" }] },
+    { ...item, car: "アクア", startCompany: "トヨタレンタリース青森", returnCandidates: [{ name: "A", company: "トヨタレンタリース岩手" }] },
+    { ...item, car: "アクア 車両番号123", available: false, startCompany: "トヨタレンタリース仙台", returnCandidates: [{ name: "B", company: "トヨタレンタリース新福島" }] },
+    { ...item, car: "ルーミー", startRegion: "中部" },
+    { ...item, car: "カローラ", startDate: "2026-10-09" },
+    { ...item, car: "アルファードHV" },
+  ];
+  const app = launch();
+  await app.respond(fixtures);
+  assert.deepEqual(modelOptions(app).map(option => [option.name, option.count]), [["ヤリス", "1台"], ["アクア", "1台"]]);
+  app.change("availableOnly", undefined, false);
+  assert.equal(modelOptions(app).find(option => option.name === "アクア").count, "2台");
+  const north = routeOptions(app).find(option => option.name === "青森 ↔ 岩手").value;
+  const south = routeOptions(app).find(option => option.name === "仙台 ↔ 新福島").value;
+  app.change("model", "ヤリス", true);
+  assert.equal(routeOptions(app).length, 1);
+  assert.equal(routeOptions(app)[0].count, "1台");
+  app.change("route", north, true);
+  assert.equal(modelOptions(app).find(option => option.name === "アクア").count, "1台");
+  app.change("model", "アクア", true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 2);
+  app.change("route", south, true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 3);
+  app.change("model", "ヤリス", false);
+  assert.equal(app.nodes["vehicle-list"].children.length, 2);
+  assert.equal(routeOptions(app).find(option => option.value === north).count, "1台");
+  hideAction(app).handlers.click();
+  assert.equal(modelOptions(app).find(option => option.name === "アクア").count, "1台");
+  app.change("availableOnly", undefined, true);
+  assert.equal(modelOptions(app).find(option => option.name === "アクア").count, "0台");
+  assert.equal(app.nodes["vehicle-list"].children.length, 0);
+  showHidden(app, true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+  app.change("departure", "中部", true);
+  app.change("rentalDay", "金", true);
+  app.change("excludedModel", "アルファード", false);
+  app.change("route", north, false);
+  app.change("route", south, false);
+  assert.deepEqual(modelOptions(app).map(option => option.name), ["ヤリス", "アクア", "ルーミー", "カローラ", "アルファードHV"]);
+});
 
 test("routes display north to south, sort by both endpoints and retain legacy stored keys", async () => {
   const legacyKey = JSON.stringify(["仙台", "新福島"].sort((a, b) => a.localeCompare(b, "ja")));

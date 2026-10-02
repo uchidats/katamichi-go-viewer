@@ -24,7 +24,7 @@ const excludedModels = ["アルファード", "ハイエース", "ヴォクシ�
 const form = document.querySelector("#filter-form");
 const FILTER_STORAGE_KEY = "katamichi-go-viewer.filters.v1";
 const booleanFilters = ["availableOnly", "relatedRegions", "includesDayOff"];
-const listFilters = ["departure", "arrival", "rentalDay", "excludedModel", "route"];
+const listFilters = ["departure", "arrival", "rentalDay", "excludedModel", "route", "model"];
 let savedFilters = loadFilterSettings();
 let restoringFilters = false;
 const FILTER_PANEL_STORAGE_KEY = "katamichi-go-viewer.filtersCollapsed.v1";
@@ -139,6 +139,7 @@ function readFilters() {
   for (const name of listFilters) filters[name] = data.getAll(name);
   // 区間候補が他の条件で消えても、保存された選択を維持します。
   filters.route = [...(savedFilters.route || [])];
+  filters.model = [...(savedFilters.model || [])];
   return filters;
 }
 
@@ -154,7 +155,8 @@ function restoreFilterSettings() {
   restoringFilters = true;
   try {
     for (const input of [...form.querySelectorAll('input[type="checkbox"]'),
-      ...document.querySelector("#route-options").querySelectorAll("input")]) restoreCheckbox(input);
+      ...document.querySelector("#route-options").querySelectorAll("input"),
+      ...document.querySelector("#model-options").querySelectorAll("input")]) restoreCheckbox(input);
   } finally {
     restoringFilters = false;
   }
@@ -318,6 +320,50 @@ function formatDate(value) {
   return date ? `${date.getUTCFullYear()}/${date.getUTCMonth() + 1}/${date.getUTCDate()}（${weekdays[date.getUTCDay()]}）` : "日付不明";
 }
 
+function vehicleModelName(value) {
+  const name = displayText(value, "").normalize("NFKC").replace(/\s+/g, " ").trim();
+  // APIの末尾の車両番号だけを除去します。HV/HEV、車種の派生名は維持します。
+  const plate = "[^\\s\\d]+\\s*\\d{2,3}\\s*[ぁ-んA-Z]\\s*[・.\\d-]+";
+  const numberSuffix = new RegExp(`\\s+(?:(?:車両番号|登録番号)\\s*(?:${plate}|\\d{1,4})|${plate}|\\d{4})$`, "u");
+  return name.replace(numberSuffix, "").trim() || "車種不明";
+}
+
+function matchesModel(vehicle, selected) {
+  return !selected.length || selected.includes(vehicleModelName(vehicle.car));
+}
+
+function matchesRoute(vehicle, selected) {
+  return !selected.length || selected.some(route => vehicleRoutes(vehicle).has(route));
+}
+
+function renderModelOptions(baseVehicles, selected) {
+  const counts = new Map();
+  for (const vehicle of baseVehicles) {
+    const model = vehicleModelName(vehicle.car);
+    counts.set(model, (counts.get(model) || 0) + 1);
+  }
+  // 他の条件で候補が消えても、選択を解除できるよう0台で残します。
+  for (const model of selected) if (!counts.has(model)) counts.set(model, 0);
+  const order = new Set(vehicles.map(vehicle => vehicleModelName(vehicle.car)));
+  for (const model of selected) order.add(model);
+  const options = [];
+  for (const model of order) {
+    if (!counts.has(model)) continue;
+    const label = element("label");
+    const input = element("input");
+    input.type = "checkbox";
+    input.name = "model";
+    input.value = model;
+    input.setAttribute("form", "filter-form");
+    input.checked = selected.includes(model);
+    label.append(input, element("span", "model-name", model), element("span", "model-count", `${counts.get(model)}台`));
+    options.push(label);
+  }
+  document.querySelector("#model-options").replaceChildren(...options);
+  document.querySelector("#model-empty").hidden = options.length > 0;
+  document.querySelector("#model-filter").hidden = false;
+}
+
 function displayText(value, fallback = "記載なし") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
@@ -446,9 +492,10 @@ function render() {
   const filters = readFilters();
   const baseVehicles = vehicles.filter(vehicle => matchesVehicle(vehicle, filters)
     && (showHiddenVehicles.checked || !isHiddenVehicle(vehicle)));
-  renderRouteOptions(baseVehicles, filters.route);
-  const matches = baseVehicles.filter(vehicle => !filters.route.length
-    || filters.route.some(route => vehicleRoutes(vehicle).has(route)));
+  renderRouteOptions(baseVehicles.filter(vehicle => matchesModel(vehicle, filters.model)), filters.route);
+  const routeVehicles = baseVehicles.filter(vehicle => matchesRoute(vehicle, filters.route));
+  renderModelOptions(routeVehicles, filters.model);
+  const matches = routeVehicles.filter(vehicle => matchesModel(vehicle, filters.model));
   document.querySelector("#vehicle-list").replaceChildren(...matches.map(createCard));
   document.querySelector("#result-count").replaceChildren(document.createTextNode("該当件数 "), element("strong", "", String(matches.length)), document.createTextNode(`件 / 全${total}件`));
   document.querySelector("#empty-state").hidden = matches.length > 0;
@@ -458,6 +505,7 @@ async function loadVehicles() {
   if (loadState === "fetching") return;
   loadState = "fetching";
   document.querySelector("#route-filter").hidden = true;
+  document.querySelector("#model-filter").hidden = true;
   const loading = document.querySelector("#loading-state");
   const error = document.querySelector("#error-state");
   loading.hidden = false;
@@ -542,6 +590,7 @@ function handleFilterChange(event) {
 }
 form.addEventListener("change", handleFilterChange);
 document.querySelector("#route-options").addEventListener("change", handleFilterChange);
+document.querySelector("#model-options").addEventListener("change", handleFilterChange);
 form.addEventListener("submit", event => event.preventDefault());
 document.querySelector("#reset-filters").addEventListener("click", resetFilters);
 document.querySelector("#empty-reset").addEventListener("click", () => {
