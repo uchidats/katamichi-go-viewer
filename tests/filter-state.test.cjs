@@ -135,7 +135,7 @@ function modelOptions(app) {
   }));
 }
 
-test("model counts normalize only typography and vehicle numbers and preserve first occurrence order", async () => {
+test("model counts normalize only typography and vehicle numbers and preserve order within each priority", async () => {
   const app = launch();
   await app.respond([
     "ルーミー 車両番号1631", "ヤリス 車両番号山形500わ9925", "アクア 宮城502わ6507",
@@ -145,11 +145,31 @@ test("model counts normalize only typography and vehicle numbers and preserve fi
     "ランドクルーザー 300", "アクア 車両番号 0427",
   ].map(car => ({ ...item, car })));
   assert.deepEqual(modelOptions(app).map(option => [option.name, option.count]), [
-    ["ルーミー", "1台"], ["ヤリス", "2台"], ["アクア", "3台"], ["カローラHV", "2台"],
-    ["ヤリスHV", "1台"], ["ヤリスHEV", "1台"], ["カローラ", "1台"], ["カローラツーリング", "1台"],
-    ["シエンタ", "1台"], ["GR86", "1台"], ["ランドクルーザー 300", "1台"],
+    ["GR86", "1台"], ["カローラHV", "2台"], ["ヤリスHV", "1台"], ["ヤリスHEV", "1台"],
+    ["ルーミー", "1台"], ["ヤリス", "2台"], ["アクア", "3台"], ["カローラ", "1台"],
+    ["カローラツーリング", "1台"], ["シエンタ", "1台"], ["ランドクルーザー 300", "1台"],
   ]);
   assert.equal(app.nodes["vehicle-list"].children[0].children[0].children[0].textContent, "ルーミー 車両番号1631");
+});
+
+test("model priority is case insensitive, takes the highest match and keeps natural order within priorities", async () => {
+  const app = launch();
+  const names = ["ヤリス", "カローラhv", "クラウンスポーツ", "プリウス", "rav4", "アクア",
+    "ヤリスクロス hev", "grヤリス", "ルーミー", "カローラハイブリッド", "GR86",
+    "クラウンクロスオーバーHEV", "RAV4 Adventure", "プリウスα"];
+  await app.respond(names.map(car => ({ ...item, car })));
+  const expected = ["クラウンスポーツ", "rav4", "grヤリス", "GR86", "クラウンクロスオーバーHEV",
+    "カローラhv", "プリウス", "ヤリスクロス hev", "カローラハイブリッド",
+    "ヤリス", "アクア", "ルーミー", "RAV4 Adventure", "プリウスα"];
+  assert.deepEqual(modelOptions(app).map(option => option.name), expected);
+  assert.ok(modelOptions(app).every(option => option.count === "1台"));
+  app.change("model", "grヤリス", true);
+  app.change("model", "ヤリスクロス hev", true);
+  assert.deepEqual(modelOptions(app).map(option => option.name), expected);
+  assert.equal(app.nodes["vehicle-list"].children.length, 2);
+  const reloaded = launch(app.storage);
+  await reloaded.respond(names.map(car => ({ ...item, car })));
+  assert.deepEqual(modelOptions(reloaded), modelOptions(app));
 });
 
 test("single and multiple model selections use OR without changing their own counts", async () => {
@@ -238,7 +258,7 @@ test("model and route facets exclude only themselves and respect regions, weekda
   app.change("excludedModel", "アルファード", false);
   app.change("route", north, false);
   app.change("route", south, false);
-  assert.deepEqual(modelOptions(app).map(option => option.name), ["ヤリス", "アクア", "ルーミー", "カローラ", "アルファードHV"]);
+  assert.deepEqual(modelOptions(app).map(option => option.name), ["アルファードHV", "ヤリス", "アクア", "ルーミー", "カローラ"]);
 });
 
 test("routes display north to south, sort by both endpoints and retain legacy stored keys", async () => {

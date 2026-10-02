@@ -336,6 +336,13 @@ function matchesRoute(vehicle, selected) {
   return !selected.length || selected.some(route => vehicleRoutes(vehicle).has(route));
 }
 
+function modelPriority(model) {
+  const name = model.toUpperCase();
+  if (name === "RAV4" || name.includes("クラウン") || name.includes("GR")) return 1;
+  if (name === "プリウス" || ["HV", "HEV", "ハイブリッド"].some(term => name.includes(term))) return 2;
+  return 3;
+}
+
 function renderModelOptions(baseVehicles, selected) {
   const counts = new Map();
   for (const vehicle of baseVehicles) {
@@ -347,7 +354,8 @@ function renderModelOptions(baseVehicles, selected) {
   const order = new Set(vehicles.map(vehicle => vehicleModelName(vehicle.car)));
   for (const model of selected) order.add(model);
   const options = [];
-  for (const model of order) {
+  // 安定ソートで、同じ優先度の車種は取得一覧の初出順を維持します。
+  for (const model of [...order].sort((a, b) => modelPriority(a) - modelPriority(b))) {
     if (!counts.has(model)) continue;
     const label = element("label");
     const input = element("input");
