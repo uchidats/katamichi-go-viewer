@@ -222,19 +222,45 @@ function matchesVehicle(vehicle, filters) {
     && !filters.excludedModel.some(model => displayText(vehicle.car, "").normalize("NFKC").includes(model));
 }
 
+// 北→南の会社順。文字列は「トヨタレンタリース＋短縮名」、例外は会社名と
+// 短縮名を組で定義します。新しい会社は該当位置へ追加するだけで対応できます。
+const routeCompanies = [
+  "札幌", "新札幌", "旭川", "北見", "帯広", "釧路", "函館",
+  "青森", "岩手", "秋田", "宮城", "仙台", "山形", "福島", "新福島",
+  "新潟", "栃木", "群馬", "茨城", "埼玉", "新埼玉", "千葉", "新千葉",
+  ["トヨタモビリティサービス", "関東"],
+  ["トヨタS&Dレンタシェア西東京", "西東京"],
+  "神奈川", "横浜", "山梨", "長野", "富山", "石川", "福井",
+  "岐阜", "静岡", ["静岡トヨタ自動車", "静岡トヨタ"], "愛知", "名古屋", "三重",
+  "滋賀", "京都", "新大阪", "大阪", "兵庫", "神戸", "奈良", "和歌山",
+  "鳥取", "島根", "岡山", "広島", "山口", "香川", "徳島", "愛媛", "高知",
+  "福岡", "博多", "佐賀", "長崎", "熊本", "大分", "宮崎", "鹿児島", "沖縄",
+].map((entry, order) => {
+  const [company, label] = Array.isArray(entry) ? entry : [`トヨタレンタリース${entry}`, entry];
+  return { company, label, order };
+});
+const routeCompanyOrder = new Map(routeCompanies.map(({ label, order }) => [label, order]));
+
+function compareRouteLabels(a, b) {
+  // 未登録会社も表示し、既知の会社の後ろに安定した順序で並べます。
+  return (routeCompanyOrder.get(a) ?? Number.MAX_SAFE_INTEGER)
+    - (routeCompanyOrder.get(b) ?? Number.MAX_SAFE_INTEGER)
+    || a.localeCompare(b, "ja");
+}
+
 function companyLabel(value) {
   const name = displayText(value, "").normalize("NFKC").trim();
   if (!name) return "";
-  if (name.includes("トヨタモビリティサービス")) return "関東";
-  if (/トヨタS[&＆]Dレンタシェア西東京/.test(name)) return "西東京";
-  if (name.includes("静岡トヨタ自動車")) return "静岡トヨタ";
-  return name.replace(/株式会社|\(株\)|トヨタレンタリース/g, "").trim();
+  const company = name.replace(/株式会社|\(株\)/g, "").trim();
+  const known = routeCompanies.find(entry => company === entry.company
+    || (!entry.company.startsWith("トヨタレンタリース") && company.includes(entry.company)));
+  return known?.label ?? company.replace(/トヨタレンタリース/g, "").trim();
 }
 
 function storeCompanyLabel(store) {
   // 現行APIは「運営会社 店舗名 （所在地）」の形式です。
   const name = displayText(store, "").normalize("NFKC").trim();
-  if (!/トヨタレンタリース|トヨタモビリティサービス|トヨタS[&＆]Dレンタシェア西東京|静岡トヨタ自動車/.test(name)) return "";
+  if (!name.includes("トヨタレンタリース") && !routeCompanies.some(entry => name.includes(entry.company))) return "";
   return companyLabel(name.replace(/株式会社|\(株\)/g, "").trim().split(/\s+/)[0]);
 }
 
@@ -262,10 +288,16 @@ function renderRouteOptions(baseVehicles, selected) {
   // 現在0台の選択も解除できるよう表示します。
   for (const route of selected) if (!counts.has(route)) counts.set(route, 0);
   const options = [];
-  for (const [route, count] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))) {
+  const orderedRoutes = [];
+  for (const [route, count] of counts) {
     let labels;
     try { labels = JSON.parse(route); } catch { continue; }
     if (!Array.isArray(labels) || labels.length !== 2 || !labels.every(label => typeof label === "string")) continue;
+    orderedRoutes.push({ route, count, labels: labels.sort(compareRouteLabels) });
+  }
+  orderedRoutes.sort((a, b) => compareRouteLabels(a.labels[0], b.labels[0])
+    || compareRouteLabels(a.labels[1], b.labels[1]));
+  for (const { route, count, labels } of orderedRoutes) {
     const label = element("label");
     const input = element("input");
     input.type = "checkbox";

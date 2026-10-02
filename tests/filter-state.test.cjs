@@ -126,6 +126,38 @@ function routeOptions(app) {
   }));
 }
 
+test("routes display north to south, sort by both endpoints and retain legacy stored keys", async () => {
+  const legacyKey = JSON.stringify(["仙台", "新福島"].sort((a, b) => a.localeCompare(b, "ja")));
+  const saved = { ...settings, route: [legacyKey] };
+  const app = launch(new Map([[storageKey, JSON.stringify(saved)]]));
+  const vehicle = (start, end) => ({ ...item, startCompany: `トヨタレンタリース${start}`,
+    returnCandidates: [{ name: "返却店", company: `トヨタレンタリース${end}` }] });
+  const fixtures = [
+    vehicle("新福島", "仙台"), vehicle("岩手", "仙台"),
+    vehicle("仙台", "青森"), vehicle("岩手", "青森"),
+    vehicle("仙台", "岩手"), vehicle("仙台", "岩手"),
+    vehicle("未登録B", "青森"), vehicle("未登録A", "青森"),
+  ];
+  await app.respond(fixtures);
+  assert.deepEqual(routeOptions(app).map(option => [option.name, option.count]), [
+    ["青森 ↔ 岩手", "1台"], ["青森 ↔ 仙台", "1台"],
+    ["青森 ↔ 未登録A", "1台"], ["青森 ↔ 未登録B", "1台"],
+    ["岩手 ↔ 仙台", "3台"], ["仙台 ↔ 新福島", "1台"],
+  ]);
+  const selected = routeOptions(app).find(option => option.checked);
+  assert.equal(selected.name, "仙台 ↔ 新福島");
+  assert.equal(selected.value, legacyKey);
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+  assert.deepEqual(app.writes, []);
+  app.change("route", legacyKey, false);
+  assert.equal(app.nodes["vehicle-list"].children.length, fixtures.length);
+  app.change("route", legacyKey, true);
+  assert.deepEqual(JSON.parse(app.storage.get(storageKey)).route, [legacyKey]);
+  const reloaded = launch(app.storage);
+  await reloaded.respond([...fixtures].reverse());
+  assert.deepEqual(routeOptions(reloaded), routeOptions(app));
+});
+
 test("routes normalize company names, ignore direction and count each vehicle once per route", async () => {
   const app = launch();
   await app.respond([
