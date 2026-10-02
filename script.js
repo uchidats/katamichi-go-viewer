@@ -24,7 +24,7 @@ const excludedModels = ["アルファード", "ハイエース", "ヴォクシ�
 const form = document.querySelector("#filter-form");
 const FILTER_STORAGE_KEY = "katamichi-go-viewer.filters.v1";
 const booleanFilters = ["availableOnly", "relatedRegions", "includesDayOff"];
-const listFilters = ["departure", "arrival", "rentalDay", "returnDay", "excludedModel"];
+const listFilters = ["departure", "arrival", "rentalDay", "excludedModel"];
 let savedFilters = loadFilterSettings();
 let restoringFilters = false;
 const FILTER_PANEL_STORAGE_KEY = "katamichi-go-viewer.filtersCollapsed.v1";
@@ -215,7 +215,6 @@ function matchesVehicle(vehicle, filters) {
     && (!filters.departure.length || filters.departure.includes(vehicle.startRegion))
     && (!filters.arrival.length || filters.arrival.includes(vehicle.returnRegion))
     && matchesDay(vehicle.startDate, filters.rentalDay)
-    && matchesDay(vehicle.endDate, filters.returnDay)
     && !filters.excludedModel.some(model => displayText(vehicle.car, "").normalize("NFKC").includes(model));
 }
 
@@ -422,7 +421,6 @@ function resetFilters() {
 createOptions("departure-options", "departure", regions);
 createOptions("arrival-options", "arrival", regions);
 createOptions("rental-day-options", "rentalDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
-createOptions("return-day-options", "returnDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
 createOptions("excluded-model-options", "excludedModel", excludedModels);
 restoreFilterSettings();
 form.addEventListener("change", event => {
@@ -456,7 +454,7 @@ document.querySelector("#recommended").addEventListener("click", () => {
   savedFilters = {};
   for (const input of form.querySelectorAll('input[type="checkbox"]')) {
     input.checked = ["availableOnly", "relatedRegions", "excludedModel"].includes(input.name)
-      || (["rentalDay", "returnDay"].includes(input.name) && ["土", "日", "祝"].includes(input.value));
+      || (input.name === "rentalDay" && ["土", "日", "祝"].includes(input.value));
   }
   saveFilterSettings();
   render();

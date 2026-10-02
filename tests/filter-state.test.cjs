@@ -12,7 +12,7 @@ const hiddenStorageKey = "katamichi-go-viewer.hiddenVehicles.v1";
 const settings = {
   availableOnly: true, relatedRegions: true, includesDayOff: false,
   departure: ["関東"], arrival: ["東北"], rentalDay: ["土", "日", "祝"],
-  returnDay: ["土", "日", "祝"], excludedModel: ["アルファード", "ハイエース", "ヴォクシー"],
+  excludedModel: ["アルファード", "ハイエース", "ヴォクシー"],
 };
 const item = {
   car: "ヤリス", available: true, startRegion: "関東", returnRegion: "東北",
@@ -51,7 +51,7 @@ class Element {
 function launch(storage = new Map([[storageKey, JSON.stringify(settings)]])) {
   const nodes = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
   const form = nodes["filter-form"];
-  for (const id of ["departure-options", "arrival-options", "rental-day-options", "return-day-options", "excluded-model-options"]) form.append(nodes[id]);
+  for (const id of ["departure-options", "arrival-options", "rental-day-options", "excluded-model-options"]) form.append(nodes[id]);
   for (const match of html.matchAll(/<input type="checkbox" name="([^"]+)"/g)) {
     const input = new Element("input");
     input.name = match[1];
@@ -264,10 +264,25 @@ test("recommended settings persist without saving API items or metadata", async 
   const expected = { ...settings, departure: [], arrival: [] };
   assert.deepEqual(JSON.parse(app.storage.get(storageKey)), expected);
   const reloaded = launch(app.storage);
-  await reloaded.respond([item, { ...item, startDate: "2026-10-09" }]);
+  await reloaded.respond([{ ...item, endDate: "2026-10-13" }, { ...item, startDate: "2026-10-09" }]);
   assert.deepEqual(reloaded.filters(), expected);
   assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
   assert.deepEqual(reloaded.writes, []);
+});
+
+test("legacy return weekdays are ignored while rental weekdays and period display remain intact", async () => {
+  const legacy = { ...settings, returnDay: ["金"] };
+  const app = launch(new Map([[storageKey, JSON.stringify(legacy)]]));
+  assert.deepEqual(app.filters(), settings);
+  await app.respond([{ ...item, endDate: "2026-10-13" }, { ...item, startDate: "2026-10-09" }]);
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+  const times = app.nodes["vehicle-list"].children[0].querySelectorAll("*").filter(node => node.tag === "time");
+  assert.deepEqual(times.map(node => node.textContent), ["2026/10/10（土）", "2026/10/13（火）"]);
+  app.change("availableOnly", undefined, false);
+  assert.deepEqual(JSON.parse(app.storage.get(storageKey)), { ...settings, availableOnly: false });
+  const reloaded = launch(app.storage);
+  await reloaded.respond([{ ...item, endDate: "2026-10-13" }]);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
 });
 
 test("API errors and retries leave saved filters intact", async () => {

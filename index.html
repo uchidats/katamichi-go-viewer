@@ -33,18 +33,17 @@
         <div class="recommendation-options">
           <label><input type="checkbox" name="relatedRegions"> 関東・東北関連</label>
           <label><input type="checkbox" name="includesDayOff"> 土日祝を含む</label>
-          <p>「関東・東北関連」は出発または到着が対象地域。「土日祝を含む」は利用期間内に対象日がある車両です。おすすめ条件では、貸出日・返却日の両方が土日祝の案件に絞り込みます。</p>
+          <p>「関東・東北関連」は出発または到着が対象地域。「土日祝を含む」は利用期間内に対象日がある車両です。おすすめ条件では、貸出日が土日祝の案件に絞り込みます。</p>
         </div>
         <div class="filter-grid">
           <fieldset><legend>出発地域</legend><div id="departure-options" class="choices"></div></fieldset>
           <fieldset><legend>到着地域</legend><div id="arrival-options" class="choices"></div></fieldset>
           <fieldset><legend>貸出曜日 <span>利用開始日</span></legend><div id="rental-day-options" class="choices"></div></fieldset>
-          <fieldset><legend>返却曜日 <span>利用終了日</span></legend><div id="return-day-options" class="choices"></div></fieldset>
           <fieldset class="full-width"><legend>除外車種 <span>選択した車種を表示しません</span></legend><div id="excluded-model-options" class="choices"></div></fieldset>
         </div>
         <p class="filter-hint">未選択の項目はすべて表示。同じ項目内は「いずれか」、異なる項目間は「すべて一致」で絞り込みます。</p>
         <p class="results-note">フィルター設定はこのブラウザに自動保存されます。「フィルターを初期化」で保存設定も削除します。</p>
-        <p id="holiday-note" class="results-note">「祝」は日本の祝日・振替休日・国民の休日が対象です（2026〜2027年の公表分に対応）。貸出日・返却日をそれぞれ判定します。</p>
+        <p id="holiday-note" class="results-note">「祝」は日本の祝日・振替休日・国民の休日が対象です（2026〜2027年の公表分に対応）。貸出日を判定します。</p>
       </form>
       <div class="hidden-vehicle-controls">
         <label><input type="checkbox" id="show-hidden-vehicles" autocomplete="off"> 非表示にした車両を表示</label>
