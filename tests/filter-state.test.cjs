@@ -13,6 +13,7 @@ const settings = {
   availableOnly: true, relatedRegions: true, includesDayOff: false,
   departure: ["関東"], arrival: ["東北"], rentalDay: ["土", "日", "祝"],
   excludedModel: ["アルファード", "ハイエース", "ヴォクシー"],
+  route: [],
 };
 const item = {
   car: "ヤリス", available: true, startRegion: "関東", returnRegion: "東北",
@@ -85,14 +86,14 @@ function launch(storage = new Map([[storageKey, JSON.stringify(settings)]])) {
   vm.runInContext(script, context);
   const app = {
     nodes, storage, writes, removals,
-    inputs: () => form.querySelectorAll("input"),
+    inputs: () => [...form.querySelectorAll("input"), ...nodes["route-options"].querySelectorAll("input")],
     filters: () => JSON.parse(vm.runInContext("JSON.stringify(readFilters())", context)),
     show: persisted => lifecycle.pageshow({ persisted }),
     change(name, value, checked) {
       const input = app.inputs().find(input => input.name === name && (value === undefined || input.value === value));
       assert.ok(input, `Missing input: ${name}/${value}`);
       input.checked = checked;
-      form.handlers.change({ target: input });
+      (name === "route" ? nodes["route-options"] : form).handlers.change({ target: input });
     },
     click: id => nodes[id].handlers.click(),
     async respond(items = [item]) {
@@ -117,6 +118,76 @@ function showHidden(app, checked) {
   app.nodes["show-hidden-vehicles"].checked = checked;
   app.nodes["show-hidden-vehicles"].handlers.change();
 }
+
+function routeOptions(app) {
+  return app.nodes["route-options"].children.map(label => ({
+    value: label.children[0].value, checked: label.children[0].checked,
+    name: label.children[1].textContent, count: label.children[2].textContent,
+  }));
+}
+
+test("routes normalize company names, ignore direction and count each vehicle once per route", async () => {
+  const app = launch();
+  await app.respond([
+    { ...item, startCompanyName: "(株)トヨタレンタリース山形", returnCandidates: [
+      { name: "A店", companyName: "（株）トヨタレンタリース宮城" },
+      { name: "B店", companyName: "株式会社トヨタレンタリース宮城" },
+      { name: "C店", companyName: "(株)トヨタレンタリース新福島" },
+    ] },
+    { ...item, startStore: "トヨタレンタリース宮城 出発店 （宮城県）",
+      returnStore: "トヨタレンタリース山形 返却可能店舗 （下記参照）", returnCandidates: [{ name: "返却店" }] },
+    { ...item, startCompanyName: "トヨタモビリティサービス株式会社", returnCandidates: [
+      { name: "D店", companyName: "トヨタS＆Dレンタシェア西東京(株)　" },
+      { name: "E店", companyName: "静岡トヨタ自動車(株)　" },
+      { name: "F店", companyName: "(株)トヨタレンタリース岩手" },
+    ] },
+    { ...item, returnCandidates: null },
+  ]);
+  const options = routeOptions(app);
+  assert.equal(options.length, 5);
+  assert.equal(options.find(option => option.name.includes("山形") && option.name.includes("宮城")).count, "2台");
+  for (const name of ["新福島", "関東", "西東京", "静岡トヨタ", "岩手"]) {
+    assert.ok(options.some(option => option.name.includes(name)), name);
+  }
+});
+
+test("route selections use OR, keep counts stable and survive reload and other filters", async () => {
+  const fixtures = [
+    { ...item, car: "ヤリスA", startCompany: "(株)トヨタレンタリース山形", returnCandidates: [
+      { name: "A", company: "(株)トヨタレンタリース宮城" },
+      { name: "B", company: "(株)トヨタレンタリース岩手" },
+    ] },
+    { ...item, car: "ヤリスB", available: false, startCompany: "(株)トヨタレンタリース新福島", returnCandidates: [
+      { name: "C", company: "(株)トヨタレンタリース宮城" },
+    ] },
+  ];
+  const app = launch();
+  await app.respond(fixtures);
+  assert.equal(routeOptions(app).length, 2);
+  app.change("availableOnly", undefined, false);
+  const before = routeOptions(app);
+  const first = before.find(option => option.name.includes("岩手")).value;
+  const second = before.find(option => option.name.includes("新福島")).value;
+  app.change("route", first, true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+  assert.deepEqual(routeOptions(app).map(({ checked, ...option }) => option), before.map(({ checked, ...option }) => option));
+  app.change("route", second, true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 2);
+  const reloaded = launch(app.storage);
+  await reloaded.respond(fixtures);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 2);
+  assert.deepEqual(reloaded.filters().route, [first, second]);
+  reloaded.change("availableOnly", undefined, true);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
+  assert.equal(routeOptions(reloaded).find(option => option.value === second).count, "0台");
+  reloaded.change("route", first, false);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 0);
+  reloaded.change("route", second, false);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
+  reloaded.click("reset-filters");
+  assert.deepEqual(reloaded.filters().route, []);
+  assert.equal(reloaded.nodes["vehicle-list"].children.length, 2);
+});
 
 test("hidden periods persist, can be reviewed and individually restored without changing filters", async () => {
   const app = launch();

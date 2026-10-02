@@ -56,6 +56,11 @@
 
     <section class="results" aria-labelledby="results-title">
       <div class="results-heading"><h2 id="results-title">見つかった車両</h2><p id="result-count" role="status" aria-live="polite" aria-atomic="true"></p></div>
+      <fieldset id="route-filter" class="route-filter" hidden>
+        <legend>利用可能な区間</legend>
+        <div id="route-options" class="choices route-options"></div>
+        <p id="route-empty" class="results-note" hidden>現在の条件で利用可能な区間はありません。</p>
+      </fieldset>
       <p id="updated-at" class="results-note"></p>
       <p id="loading-state" class="loading-state" role="status">データを読み込んでいます…</p>
       <div id="error-state" class="error-state" hidden><p id="error-message" role="alert"></p><button type="button" id="retry-load" class="secondary-button">再読み込み</button></div>

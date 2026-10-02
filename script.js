@@ -24,7 +24,7 @@ const excludedModels = ["アルファード", "ハイエース", "ヴォクシ�
 const form = document.querySelector("#filter-form");
 const FILTER_STORAGE_KEY = "katamichi-go-viewer.filters.v1";
 const booleanFilters = ["availableOnly", "relatedRegions", "includesDayOff"];
-const listFilters = ["departure", "arrival", "rentalDay", "excludedModel"];
+const listFilters = ["departure", "arrival", "rentalDay", "excludedModel", "route"];
 let savedFilters = loadFilterSettings();
 let restoringFilters = false;
 const FILTER_PANEL_STORAGE_KEY = "katamichi-go-viewer.filtersCollapsed.v1";
@@ -137,6 +137,8 @@ function readFilters() {
   const filters = {};
   for (const name of booleanFilters) filters[name] = data.has(name);
   for (const name of listFilters) filters[name] = data.getAll(name);
+  // 区間候補が他の条件で消えても、保存された選択を維持します。
+  filters.route = [...(savedFilters.route || [])];
   return filters;
 }
 
@@ -151,7 +153,8 @@ function restoreFilterSettings() {
   // 復元ではlocalStorageに書き込まず、初期値による上書きを防ぎます。
   restoringFilters = true;
   try {
-    for (const input of form.querySelectorAll('input[type="checkbox"]')) restoreCheckbox(input);
+    for (const input of [...form.querySelectorAll('input[type="checkbox"]'),
+      ...document.querySelector("#route-options").querySelectorAll("input")]) restoreCheckbox(input);
   } finally {
     restoringFilters = false;
   }
@@ -160,6 +163,7 @@ function restoreFilterSettings() {
 function saveFilterSettings() {
   if (restoringFilters) return;
   const filters = readFilters();
+  filters.route = [...(savedFilters.route || [])];
   // APIから後で追加される地域の選択も、読み込み中の変更で失わないようにします。
   for (const name of ["departure", "arrival"]) {
     const visibleValues = new Set(Array.from(form.querySelectorAll(`input[name="${name}"]`), input => input.value));
@@ -216,6 +220,65 @@ function matchesVehicle(vehicle, filters) {
     && (!filters.arrival.length || filters.arrival.includes(vehicle.returnRegion))
     && matchesDay(vehicle.startDate, filters.rentalDay)
     && !filters.excludedModel.some(model => displayText(vehicle.car, "").normalize("NFKC").includes(model));
+}
+
+function companyLabel(value) {
+  const name = displayText(value, "").normalize("NFKC").trim();
+  if (!name) return "";
+  if (name.includes("トヨタモビリティサービス")) return "関東";
+  if (/トヨタS[&＆]Dレンタシェア西東京/.test(name)) return "西東京";
+  if (name.includes("静岡トヨタ自動車")) return "静岡トヨタ";
+  return name.replace(/株式会社|\(株\)|トヨタレンタリース/g, "").trim();
+}
+
+function storeCompanyLabel(store) {
+  // 現行APIは「運営会社 店舗名 （所在地）」の形式です。
+  const name = displayText(store, "").normalize("NFKC").trim();
+  if (!/トヨタレンタリース|トヨタモビリティサービス|トヨタS[&＆]Dレンタシェア西東京|静岡トヨタ自動車/.test(name)) return "";
+  return companyLabel(name.replace(/株式会社|\(株\)/g, "").trim().split(/\s+/)[0]);
+}
+
+function vehicleRoutes(vehicle) {
+  const start = companyLabel(vehicle.startCompanyName ?? vehicle.startCompany)
+    || storeCompanyLabel(vehicle.startStore);
+  const routes = new Set();
+  if (!start || !Array.isArray(vehicle.returnCandidates)) return routes;
+  for (const candidate of vehicle.returnCandidates) {
+    if (!candidate || (typeof candidate !== "string" && typeof candidate !== "object")) continue;
+    const end = companyLabel(candidate.companyName ?? candidate.company)
+      || storeCompanyLabel(typeof candidate === "string" ? candidate : candidate.name ?? candidate.storeName)
+      || companyLabel(vehicle.returnCompanyName ?? vehicle.returnCompany)
+      || storeCompanyLabel(vehicle.returnStore);
+    if (end) routes.add(JSON.stringify([start, end].sort((a, b) => a.localeCompare(b, "ja"))));
+  }
+  return routes;
+}
+
+function renderRouteOptions(baseVehicles, selected) {
+  const counts = new Map();
+  for (const vehicle of baseVehicles) {
+    for (const route of vehicleRoutes(vehicle)) counts.set(route, (counts.get(route) || 0) + 1);
+  }
+  // 現在0台の選択も解除できるよう表示します。
+  for (const route of selected) if (!counts.has(route)) counts.set(route, 0);
+  const options = [];
+  for (const [route, count] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))) {
+    let labels;
+    try { labels = JSON.parse(route); } catch { continue; }
+    if (!Array.isArray(labels) || labels.length !== 2 || !labels.every(label => typeof label === "string")) continue;
+    const label = element("label");
+    const input = element("input");
+    input.type = "checkbox";
+    input.name = "route";
+    input.value = route;
+    input.setAttribute("form", "filter-form");
+    input.checked = selected.includes(route);
+    label.append(input, element("span", "route-name", labels.join(" ↔ ")), element("span", "route-count", `${count}台`));
+    options.push(label);
+  }
+  document.querySelector("#route-options").replaceChildren(...options);
+  document.querySelector("#route-empty").hidden = options.length > 0;
+  document.querySelector("#route-filter").hidden = false;
 }
 
 function formatDate(value) {
@@ -349,8 +412,11 @@ function createCard(vehicle) {
 function render() {
   if (loadState !== "ready") return;
   const filters = readFilters();
-  const matches = vehicles.filter(vehicle => matchesVehicle(vehicle, filters)
+  const baseVehicles = vehicles.filter(vehicle => matchesVehicle(vehicle, filters)
     && (showHiddenVehicles.checked || !isHiddenVehicle(vehicle)));
+  renderRouteOptions(baseVehicles, filters.route);
+  const matches = baseVehicles.filter(vehicle => !filters.route.length
+    || filters.route.some(route => vehicleRoutes(vehicle).has(route)));
   document.querySelector("#vehicle-list").replaceChildren(...matches.map(createCard));
   document.querySelector("#result-count").replaceChildren(document.createTextNode("該当件数 "), element("strong", "", String(matches.length)), document.createTextNode(`件 / 全${total}件`));
   document.querySelector("#empty-state").hidden = matches.length > 0;
@@ -359,6 +425,7 @@ function render() {
 async function loadVehicles() {
   if (loadState === "fetching") return;
   loadState = "fetching";
+  document.querySelector("#route-filter").hidden = true;
   const loading = document.querySelector("#loading-state");
   const error = document.querySelector("#error-state");
   loading.hidden = false;
@@ -423,7 +490,7 @@ createOptions("arrival-options", "arrival", regions);
 createOptions("rental-day-options", "rentalDay", ["月", "火", "水", "木", "金", "土", "日", "祝"]);
 createOptions("excluded-model-options", "excludedModel", excludedModels);
 restoreFilterSettings();
-form.addEventListener("change", event => {
+function handleFilterChange(event) {
   if (restoringFilters || event.target.type !== "checkbox") return;
   // 変更された項目だけを反映し、他の項目のブラウザ復元状態で保存値を上書きしません。
   const input = event.target;
@@ -440,7 +507,9 @@ form.addEventListener("change", event => {
   restoreFilterSettings();
   saveFilterSettings();
   render();
-});
+}
+form.addEventListener("change", handleFilterChange);
+document.querySelector("#route-options").addEventListener("change", handleFilterChange);
 form.addEventListener("submit", event => event.preventDefault());
 document.querySelector("#reset-filters").addEventListener("click", resetFilters);
 document.querySelector("#empty-reset").addEventListener("click", () => {
