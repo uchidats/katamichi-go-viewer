@@ -172,6 +172,27 @@ test("model priority is case insensitive, takes the highest match and keeps natu
   assert.deepEqual(modelOptions(reloaded), modelOptions(app));
 });
 
+test("excluded models take precedence over every priority keyword", async () => {
+  const context = vm.createContext({});
+  vm.runInContext(script.match(/const excludedModels = .*;/)[0]
+    + script.slice(script.indexOf("function modelPriority("), script.indexOf("function renderModelOptions(")), context);
+  const excluded = ["アルファード", "ハイエース", "ヴォクシー"];
+  const keywords = ["", "HV", "HEV", "ハイブリッド", "RAV4", "クラウン", "GR", "プリウス"];
+  const names = excluded.flatMap(model => keywords.map(keyword => model + keyword));
+  for (const name of names) {
+    assert.equal(context.modelPriority(name), 3, name);
+  }
+  assert.equal(context.modelPriority("クラウンHEV"), 1);
+  assert.equal(context.modelPriority("プリウス"), 2);
+
+  const app = launch();
+  await app.respond([...names, "クラウンHEV", "プリウス", "ヤリス"].map(car => ({ ...item, car })));
+  assert.deepEqual(modelOptions(app).map(option => [option.name, option.count]),
+    [["クラウンHEV", "1台"], ["プリウス", "1台"], ["ヤリス", "1台"]]);
+  assert.equal(app.nodes["vehicle-list"].children.length, 3);
+  assert.ok(!app.nodes["vehicle-list"].textContent.includes("アルファードHV"));
+});
+
 test("single and multiple model selections use OR without changing their own counts", async () => {
   const app = launch();
   const fixtures = ["ヤリス 車両番号123", "アクア", "ヤリス 青森501わ3175", "ルーミー"]
@@ -258,7 +279,7 @@ test("model and route facets exclude only themselves and respect regions, weekda
   app.change("excludedModel", "アルファード", false);
   app.change("route", north, false);
   app.change("route", south, false);
-  assert.deepEqual(modelOptions(app).map(option => option.name), ["アルファードHV", "ヤリス", "アクア", "ルーミー", "カローラ"]);
+  assert.deepEqual(modelOptions(app).map(option => option.name), ["ヤリス", "アクア", "ルーミー", "カローラ", "アルファードHV"]);
 });
 
 test("routes display north to south, sort by both endpoints and retain legacy stored keys", async () => {

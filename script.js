@@ -338,6 +338,8 @@ function matchesRoute(vehicle, selected) {
 
 function modelPriority(model) {
   const name = model.toUpperCase();
+  // 除外車種は、優先キーワードを含んでいても優先車種にしません。
+  if (excludedModels.some(model => name.includes(model))) return 3;
   if (name === "RAV4" || name.includes("クラウン") || name.includes("GR")) return 1;
   if (name === "プリウス" || ["HV", "HEV", "ハイブリッド"].some(term => name.includes(term))) return 2;
   return 3;
