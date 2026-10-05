@@ -210,6 +210,23 @@ function matchesDay(value, selectedDays) {
   ));
 }
 
+function matchesRentalDays(vehicle, selectedDays) {
+  if (selectedDays.length === 0) return true;
+  const start = parseDate(vehicle.startDate);
+  const end = parseDate(vehicle.endDate);
+  if (!start || !end) return false;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const today = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  // 日付だけをUTCで表現し、実行環境のタイムゾーンに左右されずに走査します。
+  const date = new Date(Math.max(start.getTime(), parseDate(`${today.year}-${today.month}-${today.day}`).getTime()));
+  for (; date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    if (matchesDay(date.toISOString().slice(0, 10), selectedDays)) return true;
+  }
+  return false;
+}
+
 function isTrue(value) {
   return value === true || value === 1 || value === "true";
 }
@@ -220,7 +237,7 @@ function matchesVehicle(vehicle, filters) {
     && (!filters.includesDayOff || [vehicle.includesSaturday, vehicle.includesSunday, vehicle.includesHoliday].some(isTrue))
     && (!filters.departure.length || filters.departure.includes(vehicle.startRegion))
     && (!filters.arrival.length || filters.arrival.includes(vehicle.returnRegion))
-    && matchesDay(vehicle.startDate, filters.rentalDay)
+    && matchesRentalDays(vehicle, filters.rentalDay)
     && !filters.excludedModel.some(model => displayText(vehicle.car, "").normalize("NFKC").includes(model));
 }
 

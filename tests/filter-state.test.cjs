@@ -50,7 +50,7 @@ class Element {
   reset() { this.querySelectorAll("input").forEach(input => { input.checked = false; }); }
 }
 
-function launch(storage = new Map([[storageKey, JSON.stringify(settings)]])) {
+function launch(storage = new Map([[storageKey, JSON.stringify(settings)]]), now = "2026-10-05T03:00:00Z") {
   const nodes = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
   const form = nodes["filter-form"];
   for (const id of ["departure-options", "arrival-options", "rental-day-options", "excluded-model-options"]) form.append(nodes[id]);
@@ -65,6 +65,10 @@ function launch(storage = new Map([[storageKey, JSON.stringify(settings)]])) {
   const removals = [];
   let resolveRequest, rejectRequest;
   const context = {
+    Date: class extends Date {
+      constructor(...args) { super(...(args.length ? args : [now])); }
+      static now() { return new Date(now).getTime(); }
+    },
     document: {
       querySelector: selector => nodes[selector.slice(1)], getElementById: id => nodes[id],
       createElement: tag => new Element(tag), createTextNode: text => ({ textContent: text }),
@@ -134,6 +138,51 @@ function modelOptions(app) {
     name: label.children[1].textContent, count: label.children[2].textContent,
   }));
 }
+
+test("rental weekdays match any remaining day, including today and the end date", async () => {
+  const cases = [
+    ["2026-10-03", "2026-10-05", ["月"], true],
+    ["2026-10-03", "2026-10-05", ["土"], false],
+    ["2026-10-03", "2026-10-05", ["日"], false],
+    ["2026-10-03", "2026-10-05", ["土", "日"], false],
+    ["2026-10-03", "2026-10-05", ["月", "土", "日"], true],
+    ["2026-10-03", "2026-10-11", ["土"], true],
+    ["2026-10-06", "2026-10-11", ["月"], false],
+    ["2026-10-06", "2026-10-11", ["日"], true],
+    ["2026-10-05", "2026-10-05", ["月"], true],
+    ["2026-10-03", "2026-10-04", ["日"], false],
+    ["2026-10-03", "2026-10-04", [], true],
+    ["2026-10-11", "2026-10-12", ["祝"], true],
+    ["2026-09-22", "2026-10-05", ["祝"], false],
+    ["invalid", "2026-10-05", ["月"], false],
+    ["2026-10-05", "invalid", ["月"], false],
+    ["2026-10-06", "2026-10-05", ["月"], false],
+  ];
+  for (const [startDate, endDate, rentalDay, expected] of cases) {
+    const app = launch(new Map([[storageKey, JSON.stringify({ ...settings, rentalDay })]]));
+    await app.respond([{ ...item, startDate, endDate }]);
+    assert.equal(app.nodes["vehicle-list"].children.length, Number(expected), JSON.stringify({ startDate, endDate, rentalDay }));
+  }
+});
+
+test("rental weekdays switch at midnight in Japan regardless of host timezone", async () => {
+  for (const [now, expected] of [["2026-10-04T14:59:59Z", 1], ["2026-10-04T15:00:00Z", 0]]) {
+    const app = launch(new Map([[storageKey, JSON.stringify({ ...settings, rentalDay: ["日"] })]]), now);
+    await app.respond([{ ...item, startDate: "2026-10-03", endDate: "2026-10-05" }]);
+    assert.equal(app.nodes["vehicle-list"].children.length, expected, now);
+  }
+});
+
+test("period-ended status still follows availability filtering when weekdays are unselected", async () => {
+  const app = launch(new Map([[storageKey, JSON.stringify({ ...settings, rentalDay: [] })]]));
+  await app.respond([{ ...item, available: false, status: "期間終了", startDate: "2026-10-03", endDate: "2026-10-04" }]);
+  assert.equal(app.nodes["vehicle-list"].children.length, 0);
+  app.change("availableOnly", undefined, false);
+  assert.equal(app.nodes["vehicle-list"].children.length, 1);
+  assert.ok(app.nodes["vehicle-list"].textContent.includes("期間終了"));
+  app.change("rentalDay", "日", true);
+  assert.equal(app.nodes["vehicle-list"].children.length, 0);
+});
 
 test("model counts normalize only typography and vehicle numbers and preserve order within each priority", async () => {
   const app = launch();
@@ -245,7 +294,7 @@ test("model and route facets exclude only themselves and respect regions, weekda
     { ...item, car: "アクア", startCompany: "トヨタレンタリース青森", returnCandidates: [{ name: "A", company: "トヨタレンタリース岩手" }] },
     { ...item, car: "アクア 車両番号123", available: false, startCompany: "トヨタレンタリース仙台", returnCandidates: [{ name: "B", company: "トヨタレンタリース新福島" }] },
     { ...item, car: "ルーミー", startRegion: "中部" },
-    { ...item, car: "カローラ", startDate: "2026-10-09" },
+    { ...item, car: "カローラ", startDate: "2026-10-09", endDate: "2026-10-09" },
     { ...item, car: "アルファードHV" },
   ];
   const app = launch();
@@ -523,7 +572,7 @@ test("recommended settings persist without saving API items or metadata", async 
   const expected = { ...settings, departure: [], arrival: [] };
   assert.deepEqual(JSON.parse(app.storage.get(storageKey)), expected);
   const reloaded = launch(app.storage);
-  await reloaded.respond([{ ...item, endDate: "2026-10-13" }, { ...item, startDate: "2026-10-09" }]);
+  await reloaded.respond([{ ...item, endDate: "2026-10-13" }, { ...item, startDate: "2026-10-09", endDate: "2026-10-09" }]);
   assert.deepEqual(reloaded.filters(), expected);
   assert.equal(reloaded.nodes["vehicle-list"].children.length, 1);
   assert.deepEqual(reloaded.writes, []);
@@ -533,7 +582,7 @@ test("legacy return weekdays are ignored while rental weekdays and period displa
   const legacy = { ...settings, returnDay: ["金"] };
   const app = launch(new Map([[storageKey, JSON.stringify(legacy)]]));
   assert.deepEqual(app.filters(), settings);
-  await app.respond([{ ...item, endDate: "2026-10-13" }, { ...item, startDate: "2026-10-09" }]);
+  await app.respond([{ ...item, endDate: "2026-10-13" }, { ...item, startDate: "2026-10-09", endDate: "2026-10-09" }]);
   assert.equal(app.nodes["vehicle-list"].children.length, 1);
   const times = app.nodes["vehicle-list"].children[0].querySelectorAll("*").filter(node => node.tag === "time");
   assert.deepEqual(times.map(node => node.textContent), ["2026/10/10（土）", "2026/10/13（火）"]);
