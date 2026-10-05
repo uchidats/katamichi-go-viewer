@@ -165,6 +165,29 @@ test("rental weekdays match any remaining day, including today and the end date"
   }
 });
 
+for (const [today, cases] of [
+  ["2026-10-06", [
+    [["土"], false], [["日"], false], [["土", "日"], false],
+    [["火"], true], [["月", "火"], true], [["火", "土", "日"], true],
+  ]],
+  ["2026-10-05", [
+    [["土", "日"], false], [["月"], true], [["火"], true], [["月", "土", "日"], true],
+  ]],
+]) {
+  for (const [rentalDay, expected] of cases) {
+    test(`October 3–6 rental on JST ${today}, ${rentalDay.join("/")}: ${expected ? "visible" : "hidden"}`, async () => {
+      // Midnight JST is still the previous calendar date in UTC.
+      const app = launch(new Map([[storageKey, JSON.stringify({ ...settings, rentalDay })]]), `${today}T00:00:00+09:00`);
+      await app.respond([{ ...item, startDate: "2026-10-03", endDate: "2026-10-06" }]);
+      assert.equal(app.nodes["vehicle-list"].children.length, Number(expected));
+      app.show(true);
+      assert.equal(app.nodes["vehicle-list"].children.length, Number(expected));
+      assert.deepEqual(app.writes, []);
+      assert.deepEqual(app.removals, []);
+    });
+  }
+}
+
 test("rental weekdays switch at midnight in Japan regardless of host timezone", async () => {
   for (const [now, expected] of [["2026-10-04T14:59:59Z", 1], ["2026-10-04T15:00:00Z", 0]]) {
     const app = launch(new Map([[storageKey, JSON.stringify({ ...settings, rentalDay: ["日"] })]]), now);
